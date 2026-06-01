@@ -114,6 +114,66 @@
 }
 .ssd-popup-btn:hover { border-color: #c8a96e; }
 
+/* ── Sign button (compose side) ───────────────────────────────────────────── */
+
+.ssd-sign-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1.5px solid #c8a96e;
+  border-radius: 18px;
+  background: transparent;
+  color: #c8a96e;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+.ssd-sign-btn:hover:not(:disabled) { background: rgba(200, 169, 110, 0.12); }
+.ssd-sign-btn:disabled { opacity: 0.5; cursor: default; }
+.ssd-sign-btn[data-ssd-state="signed"] { border-color: #4caf77; color: #4caf77; }
+.ssd-sign-btn[data-ssd-state="error"]  { border-color: #e05050; color: #e05050; }
+
+/* Facebook-specific: blend into the action bar */
+.ssd-sign-btn--fb {
+  margin: 2px 4px;
+  font-size: 12px;
+  padding: 5px 10px;
+}
+
+/* ── Key picker dropdown ──────────────────────────────────────────────────── */
+
+.ssd-key-picker {
+  background: #1e1e1e;
+  border: 1px solid #2a2a2a;
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  overflow: hidden;
+  min-width: 240px;
+  max-width: 360px;
+}
+
+.ssd-key-picker-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid #2a2a2a;
+  color: #e8e8e8;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.ssd-key-picker-item:last-child { border-bottom: none; }
+.ssd-key-picker-item:hover { background: rgba(200, 169, 110, 0.1); color: #c8a96e; }
+
+/* ── In-page verification popup (existing, kept here for reference) ─────── */
+
 .ssd-popup-canonical {
   margin: 0;
   padding: 10px 14px;

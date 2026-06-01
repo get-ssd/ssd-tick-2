@@ -150,9 +150,86 @@ async function resolveKeyHint(keyHint) {
   }
 }
 
+// ── PWA signing handoff ──────────────────────────────────────────────────────
+//
+// Signing flow:
+//   1. Content script sends SSD_SIGN_REQUEST to this worker.
+//   2. Worker opens the PWA in a popup window with the payload in URL params.
+//   3. PWA shows canonical text, prompts biometric, then calls:
+//        chrome.runtime.sendMessage(EXTENSION_ID, { type:'SSD_SIGN_RESPONSE', requestId, signature })
+//      via externally_connectable.
+//   4. Worker resolves the pending request and returns { ok, signature } to the content script.
+//
+// PWA URL: configured via chrome.storage.local key 'pwaUrl'; defaults to https://localhost/.
+
+const _pendingSign = new Map(); // requestId → { resolve, reject, timeoutId }
+const SIGN_TIMEOUT_MS = 120_000;
+
+async function getPwaUrl() {
+  const data = await chrome.storage.local.get('pwaUrl');
+  return (data.pwaUrl || 'https://localhost').replace(/\/+$/, '');
+}
+
+async function handleSignRequest(payload) {
+  const requestId = crypto.randomUUID();
+  const pwaBase = await getPwaUrl();
+
+  const params = new URLSearchParams({
+    action:      'sign',
+    request_id:  requestId,
+    ext_id:      chrome.runtime.id,
+    fingerprint: payload.fingerprint,
+    signed_payload: payload.signedPayload,
+    platform:    payload.platform || '',
+    preview:     payload.previewText || '',
+  });
+
+  await chrome.windows.create({
+    url:    `${pwaBase}/sign?${params}`,
+    type:   'popup',
+    width:  440,
+    height: 640,
+    focused: true,
+  });
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      _pendingSign.delete(requestId);
+      reject(new Error('Sign request timed out — PWA did not respond within 2 minutes'));
+    }, SIGN_TIMEOUT_MS);
+    _pendingSign.set(requestId, { resolve, reject, timeoutId });
+  });
+}
+
+// PWA response (externally_connectable).
+chrome.runtime.onMessageExternal.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === 'SSD_SIGN_RESPONSE') {
+    const pending = _pendingSign.get(msg.requestId);
+    if (pending) {
+      _pendingSign.delete(msg.requestId);
+      clearTimeout(pending.timeoutId);
+      if (msg.signature) {
+        pending.resolve({ ok: true, signature: msg.signature });
+      } else {
+        pending.reject(new Error(msg.error || 'Sign cancelled'));
+      }
+    }
+    sendResponse({ ok: true });
+  }
+  return false;
+});
+
 // ── message handling ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg && msg.type === 'SSD_SIGN_REQUEST') {
+    handleSignRequest(msg.payload).then(
+      result => sendResponse(result),
+      err    => sendResponse({ ok: false, error: String(err.message || err) })
+    );
+    return true; // async response
+  }
+
   if (msg && msg.type === 'resolveKey') {
     (async () => {
       try {

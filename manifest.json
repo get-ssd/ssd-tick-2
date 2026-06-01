@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
   "version": "0.2.0",
-  "permissions": ["storage"],
+  "permissions": ["storage", "windows"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://m.facebook.com/*"
@@ -19,6 +19,7 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
+        "core/signer.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "ui/badge.js",

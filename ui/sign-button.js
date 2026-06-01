@@ -1,18 +1,172 @@
 // ui/sign-button.js
-// STUB — Prompt 2 (compose plugin).
+// [Sign] button injected into platform compose boxes.
 //
-// TODO (Prompt 2): build the [Sign] button injected into the platform compose
-// box. On click it will: read the raw compose text, canonicalise it (core/canon),
-// build the signed payload, call the PWA signing endpoint (or a local key),
-// append the resulting —SSD·…— token to the compose box, and optionally submit
-// to the vault for short-token use. It must never modify the user's text above
-// the token — it appends only (CANON-Spec §11).
+// Depends on: signer, keyring (loaded before this in the manifest).
+// Platform files call signButton.create(composeEl, platform) and append the
+// returned element wherever they see fit.
 
 const signButton = {
-  // Returns the [Sign] button element. No-op stub for now.
-  create(_composeElement) {
-    // TODO Prompt 2: construct and wire the Sign button.
-    return null;
+
+  // Create the [Sign] button wired to the given compose element.
+  // Returns the button element, or null if no signing keys are configured.
+  create(composeElement, platform) {
+    const btn = document.createElement('button');
+    btn.className = 'ssd-sign-btn';
+    btn.setAttribute('type', 'button');
+    btn.setAttribute('title', 'Sign this post with SSD');
+    this._setState(btn, 'default');
+
+    btn.addEventListener('click', async () => {
+      const currentState = btn.dataset.ssdState;
+
+      // Signed → clicking again removes the token and resets.
+      if (currentState === 'signed') {
+        this._removeToken(composeElement);
+        this._setState(btn, 'default');
+        return;
+      }
+
+      // Error → retry.
+      if (currentState === 'error') {
+        this._setState(btn, 'default');
+        return;
+      }
+
+      if (currentState !== 'default') return;
+
+      await this._signingFlow(btn, composeElement, platform);
+    });
+
+    return btn;
+  },
+
+  async _signingFlow(btn, composeElement, platform) {
+    // 1. Pick signing key.
+    const keys = signer.signingKeys();
+    if (keys.length === 0) {
+      this._showMessage(btn, 'No signing key configured — open SSD to set one up');
+      return;
+    }
+
+    let fingerprint;
+    if (keys.length === 1) {
+      fingerprint = keys[0].fingerprint;
+    } else {
+      fingerprint = await this._pickKey(btn, keys);
+      if (!fingerprint) return; // user dismissed picker
+    }
+
+    // 2. Read raw compose text, strip any existing token.
+    const rawWithToken = this._readCompose(composeElement);
+    const rawText = rawWithToken.replace(/\s*—SSD·[^—]+—\s*$/, '').trim();
+
+    // 3. Sign.
+    this._setState(btn, 'signing');
+    try {
+      const { token } = await signer.sign(rawText, fingerprint, platform);
+      // 4. Inject token as final line with blank-line separator.
+      this._appendToken(composeElement, token);
+      this._setState(btn, 'signed');
+    } catch (err) {
+      console.error('[SSD] Signing failed:', err);
+      this._setState(btn, 'error');
+    }
+  },
+
+  // Show a floating key picker near the button; resolves to fingerprint or null.
+  _pickKey(btn, keys) {
+    return new Promise(resolve => {
+      const picker = document.createElement('div');
+      picker.className = 'ssd-key-picker';
+
+      for (const k of keys) {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'ssd-key-picker-item';
+        const hint = k.key_hint || `fp:${k.fingerprint}`;
+        const label = (k.name || k.fingerprint).replace(/^[OD]:/, '');
+        item.textContent = `${label} (${k.fingerprint.slice(0, 8)}) — ${hint}`;
+        item.addEventListener('click', () => {
+          picker.remove();
+          resolve(k.fingerprint);
+        });
+        picker.appendChild(item);
+      }
+
+      // Dismiss on outside click.
+      const dismiss = (e) => {
+        if (!picker.contains(e.target) && e.target !== btn) {
+          picker.remove();
+          document.removeEventListener('click', dismiss, true);
+          resolve(null);
+        }
+      };
+      document.addEventListener('click', dismiss, true);
+
+      // Position below the button.
+      const rect = btn.getBoundingClientRect();
+      picker.style.cssText = `position:fixed;top:${rect.bottom + 4}px;left:${rect.left}px;z-index:2147483647`;
+      document.body.appendChild(picker);
+    });
+  },
+
+  _setState(btn, state) {
+    btn.dataset.ssdState = state;
+    btn.disabled = (state === 'signing');
+    const labels = {
+      default: '🔏 Sign',
+      signing: 'Signing…',
+      signed:  '✓ Signed',
+      error:   '✗ Failed',
+    };
+    btn.textContent = labels[state] || labels.default;
+  },
+
+  _showMessage(btn, msg) {
+    btn.title = msg;
+    this._setState(btn, 'error');
+    setTimeout(() => { if (btn.dataset.ssdState === 'error') this._setState(btn, 'default'); }, 4000);
+  },
+
+  // Read the visible text of a compose element (contenteditable or textarea/input).
+  _readCompose(el) {
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') return el.value;
+    return el.innerText || el.textContent || '';
+  },
+
+  // Append the SSD token as the final line of the compose element, separated by
+  // a blank line. Uses execCommand so React/Vue synthetic events fire correctly.
+  _appendToken(el, token) {
+    const suffix = '\n\n' + token;
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      el.focus();
+      el.setSelectionRange(el.value.length, el.value.length);
+      document.execCommand('insertText', false, suffix);
+    } else {
+      // contenteditable
+      el.focus();
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      document.execCommand('insertText', false, suffix);
+    }
+  },
+
+  // Remove the trailing —SSD·…— token from the compose element.
+  _removeToken(el) {
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
+      el.value = el.value.replace(/\s*—SSD·[^—]+—\s*$/, '');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    } else {
+      const text = (el.innerText || el.textContent || '').replace(/\s*—SSD·[^—]+—\s*$/, '');
+      // Replace innerText via execCommand to keep React in sync.
+      el.focus();
+      document.execCommand('selectAll', false, null);
+      document.execCommand('insertText', false, text);
+    }
   },
 };
 
