@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "SSD — Signed, Sealed, Delivered",
+  "version": "0.2.0",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://www.facebook.com/*",
+    "https://m.facebook.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.facebook.com/*", "https://m.facebook.com/*"],
+      "js": [
+        "core/token-parser.js",
+        "core/canon.js",
+        "core/keyring.js",
+        "core/vault.js",
+        "core/verifier.js",
+        "scanners/text-scanner.js",
+        "scanners/image-scanner.js",
+        "ui/badge.js",
+        "ui/popup.js",
+        "ui/sign-button.js",
+        "platforms/facebook.js"
+      ],
+      "css": ["ui/styles.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "externally_connectable": {
+    "matches": ["https://localhost/*"]
+  },
+  "action": {
+    "default_popup": "popup/popup.html"
+  }
+}
