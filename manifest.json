@@ -12,6 +12,24 @@
   },
   "content_scripts": [
     {
+      "matches": ["http://localhost:8080/*", "http://127.0.0.1:8080/*"],
+      "js": [
+        "core/token-parser.js",
+        "core/canon.js",
+        "core/keyring.js",
+        "core/vault.js",
+        "core/verifier.js",
+        "core/signer.js",
+        "scanners/text-scanner.js",
+        "scanners/image-scanner.js",
+        "ui/badge.js",
+        "ui/popup.js",
+        "test/bootstrap.js"
+      ],
+      "css": ["ui/styles.css"],
+      "run_at": "document_idle"
+    },
+    {
       "matches": ["https://www.facebook.com/*", "https://m.facebook.com/*"],
       "js": [
         "core/token-parser.js",
