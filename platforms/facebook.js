@@ -45,24 +45,12 @@ const facebook = {
   // Inject badgeElement near the anchor node. Returns the badge that is in the
   // DOM — either the newly injected one, or an existing one from a prior scan.
   injectIndicator(anchorNode, badgeElement) {
-    const parent = anchorNode.parentElement || anchorNode.parentNode;
-    const container =
-      (parent && parent.closest && parent.closest('[role="article"]')) ||
-      (parent && parent.closest && parent.closest('[role="main"]')) ||
-      parent;
-
-    console.debug('[SSD:inject] container:', container ? container.nodeName : null, container ? container.getAttribute && container.getAttribute('role') : null);
-    if (!container) { console.debug('[SSD:inject] no container — bailing'); return null; }
-
+    const container = anchorNode.parentElement || anchorNode.parentNode;
+    if (!container) { console.debug('[SSD:inject] no container'); return null; }
     const existing = container.querySelector && container.querySelector('.ssd-indicator');
-    if (existing) {
-      console.debug('[SSD:inject] returning existing .ssd-indicator');
-      return existing;
-    }
-
-    if (container.style) container.style.position = 'relative';
+    if (existing) { console.debug('[SSD:inject] returning existing badge'); return existing; }
     container.appendChild(badgeElement);
-    console.debug('[SSD:inject] badge appended, state:', badgeElement.dataset.ssdState);
+    console.debug('[SSD:inject] badge injected into', container.nodeName);
     return badgeElement;
   },
 
@@ -166,9 +154,7 @@ const facebook = {
 (function bootstrapFacebook() {
   if (!facebook.hostnames.includes(location.hostname)) return;
 
-  // Read the post's raw text for a token's text node. The token's own context
-  // is the nearest [role="article"]; we take that container's textContent so
-  // canonicalisation sees exactly what the user sees (incl. "See more" text).
+  // Read the post's raw text by walking up from the token's text node.
   function readPostText(textNode) {
     const tokenText = textNode.textContent;
     console.debug('[SSD:readPost] token text length:', tokenText.length);
@@ -184,7 +170,6 @@ const facebook = {
       const full = el.textContent || '';
       const nonToken = full.length - tokenText.length;
       console.debug('[SSD:readPost] L' + level, el.nodeName,
-        el.getAttribute && el.getAttribute('role') ? 'role=' + el.getAttribute('role') : '',
         'full:', full.length, 'non-token:', nonToken,
         'sample:', full.slice(0, 80).replace(/\n/g, '↵'));
       if (nonToken >= 20) {
