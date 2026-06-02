@@ -75,6 +75,12 @@ const verifier = {
     console.debug('[SSD:verify] contentHash:', contentHash);
     console.debug('[SSD:verify] canonicalText:', canonicalText.slice(0, 120).replace(/\n/g, '↵'));
 
+    // hash8 is a hint only — log it but don't short-circuit on mismatch.
+    if (parsed.hash8) {
+      console.debug('[SSD:verify] hash8 check:', parsed.hash8, 'computed:', contentHash.slice(0, 8),
+        parsed.hash8 === contentHash.slice(0, 8) ? '✓' : '≠ (hint only)');
+    }
+
     // Resolve the signer's key.
     const key = await this.resolveKey(parsed.fingerprint, parsed.keyHint);
     console.debug('[SSD:verify] key resolved:', key ? key.fingerprint : null);

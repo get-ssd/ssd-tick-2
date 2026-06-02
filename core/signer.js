@@ -64,11 +64,12 @@ const signer = {
     const fullSignature = resp.signature;
 
     // 6. Build token string.
+    const hash8 = contentHash.slice(0, 8);
     let token;
     if (tokenType === 'short') {
-      token = tokenParser.buildShort(fingerprint, keyHint, tokenParser.sigHint(fullSignature), timestamp);
+      token = tokenParser.buildShort(fingerprint, keyHint, hash8, tokenParser.sigHint(fullSignature), timestamp);
     } else {
-      token = tokenParser.buildFull(fingerprint, keyHint, fullSignature, timestamp);
+      token = tokenParser.buildFull(fingerprint, keyHint, hash8, fullSignature, timestamp);
     }
 
     // 7. Vault submission — fire-and-forget; don't fail the sign if vault is down.
