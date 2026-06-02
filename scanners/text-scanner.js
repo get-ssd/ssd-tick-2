@@ -59,12 +59,15 @@ const textScanner = {
         console.debug('[SSD:scan] tokenParser.parse result:', parsed);
         if (parsed) {
           matches.push({ raw: match[0], parsed });
-        } else if (onKeyDeclaration) {
-          // 3-field key declaration: —SSD·{fingerprint}·{value}—
+        } else {
+          // 2-field key declaration: —SSD·{fingerprint}·{value}—
           const inner = match[0].slice(5, -1);
           const parts = inner.split('·');
           if (parts.length === 2 && parts[0] && parts[1]) {
-            onKeyDeclaration(parts[0], parts[1], node);
+            if (onKeyDeclaration) onKeyDeclaration(parts[0], parts[1], node);
+          } else {
+            // Unrecognised token format — badge it anyway so it's visible.
+            matches.push({ raw: match[0], parsed: null });
           }
         }
       }

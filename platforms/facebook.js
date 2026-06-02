@@ -273,13 +273,24 @@ const facebook = {
       );
       console.debug('[SSD:fb] scan complete, jobs:', jobs.length);
       for (const { textNode, parsedToken, commit } of jobs) {
-        // Inject a SCANNING badge immediately so the user sees it straight away.
+        // Inject SCANNING badge immediately — even for unrecognised token formats.
         const scanningEl = badge.create({
-          state: 'SCANNING', fingerprint: parsedToken.fingerprint,
-          keyHint: parsedToken.keyHint, signerName: null, trustLevel: null,
-          timestamp: parsedToken.timestamp, isShort: parsedToken.isShort, vaultUsed: false,
+          state: 'SCANNING',
+          fingerprint: parsedToken ? parsedToken.fingerprint : null,
+          keyHint: parsedToken ? parsedToken.keyHint : null,
+          signerName: null, trustLevel: null,
+          timestamp: parsedToken ? parsedToken.timestamp : null,
+          isShort: parsedToken ? parsedToken.isShort : false,
+          vaultUsed: false,
         });
         const badgeEl = facebook.injectIndicator(textNode, scanningEl) || scanningEl;
+
+        if (!parsedToken) {
+          // Token found but format not recognised — leave as SCANNING for now.
+          console.debug('[SSD:fb] unrecognised token format, badged but not verified');
+          commit();
+          continue;
+        }
 
         const rawPostText = readPostText(textNode);
         console.debug('[SSD:fb] rawPostText length:', rawPostText.length, 'preview:', rawPostText.slice(0, 80).replace(/\n/g, '↵'));
