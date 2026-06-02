@@ -5,7 +5,9 @@
   "permissions": ["storage", "windows"],
   "host_permissions": [
     "https://www.facebook.com/*",
-    "https://m.facebook.com/*"
+    "https://m.facebook.com/*",
+    "http://localhost:8080/*",
+    "http://127.0.0.1:8080/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"
