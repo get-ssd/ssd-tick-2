@@ -78,16 +78,23 @@ async function run() {
 
   chromeProc.on('error', err => { console.error('Chrome failed to start:', err); process.exit(1); });
 
-  await sleep(3000);
-
+  // Poll for Chrome debug port — loading an extension can take 6-8s on first launch
   let browser;
-  try {
-    browser = await puppeteer.connect({
-      browserURL: `http://localhost:${DEBUG_PORT}`,
-      defaultViewport: null,
-    });
-  } catch (err) {
-    console.error('Could not connect to Chrome debug port:', err.message);
+  for (let attempt = 1; attempt <= 12; attempt++) {
+    await sleep(1000);
+    try {
+      browser = await puppeteer.connect({
+        browserURL: `http://localhost:${DEBUG_PORT}`,
+        defaultViewport: null,
+      });
+      console.log(`  Connected after ${attempt}s`);
+      break;
+    } catch {
+      process.stdout.write('.');
+    }
+  }
+  if (!browser) {
+    console.error('\nCould not connect to Chrome debug port after 12s — is Chrome already running?');
     chromeProc.kill();
     process.exit(1);
   }
