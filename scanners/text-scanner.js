@@ -15,7 +15,11 @@ const textScanner = {
   scan(callback, onKeyDeclaration) {
     // Quick bail: if the page has no token at all, do nothing (avoids walking
     // the whole DOM on token-free pages → no console noise, cheap).
-    if (document.body.textContent.indexOf('—SSD·') === -1) return;
+    if (document.body.textContent.indexOf('—SSD·') === -1) {
+      console.debug('[SSD:scan] no —SSD· found in page text');
+      return;
+    }
+    console.debug('[SSD:scan] —SSD· found in page, walking text nodes');
 
     // Collect every text node that contains at least one token.
     const walker = document.createTreeWalker(
@@ -50,7 +54,9 @@ const textScanner = {
       let match;
       const matches = [];
       while ((match = pattern.exec(text)) !== null) {
+        console.debug('[SSD:scan] PATTERN matched raw:', match[0]);
         const parsed = tokenParser.parse(match[0]);
+        console.debug('[SSD:scan] tokenParser.parse result:', parsed);
         if (parsed) {
           matches.push({ raw: match[0], parsed });
         } else if (onKeyDeclaration) {
@@ -72,15 +78,23 @@ const textScanner = {
       }
     }
 
+    console.debug('[SSD:scan] contexts found:', byContext.size);
     // For each context, the post's own token is the LAST one. Skip the rest.
-    for (const [, tokens] of byContext) {
+    for (const [ctx, tokens] of byContext) {
       if (!tokens.length) continue;
       const chosen = tokens[tokens.length - 1];
       // Guard against re-processing the same text node + token.
       const key = chosen.node;
-      if (this._isProcessed(key, chosen.raw)) continue;
-      this._markProcessed(key, chosen.raw);
-      callback(chosen.node, chosen.parsed);
+      if (this._isProcessed(key, chosen.raw)) {
+        console.debug('[SSD:scan] already processed, skipping:', chosen.raw.slice(0, 40));
+        continue;
+      }
+      // Pass a commit function — caller must invoke it once the result is
+      // final (non-TRUNCATED). This avoids locking out a token that was
+      // scanned before the post text was fully loaded.
+      const commit = () => this._markProcessed(key, chosen.raw);
+      console.debug('[SSD:scan] firing callback for token:', chosen.raw.slice(0, 40), 'context:', ctx.nodeName, ctx.getAttribute && ctx.getAttribute('role'));
+      callback(chosen.node, chosen.parsed, commit);
     }
   },
 

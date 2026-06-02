@@ -100,19 +100,6 @@ async function tryCards(urls) {
   return null;
 }
 
-async function resolveFb(profileId) {
-  // Facebook key card location: well-known paths on the profile host.
-  // (PLAT-Facebook defines profile key discovery; for v0.2 we probe the
-  //  well-known card paths under the profile URL.)
-  const base = `https://www.facebook.com/${encodeURIComponent(profileId)}`;
-  const candidates = [
-    `https://www.facebook.com/${encodeURIComponent(profileId)}/ssd-key.json`,
-    ...KEY_CARD_PATHS.map(p => `https://www.facebook.com${p}?profile=${encodeURIComponent(profileId)}`),
-    `${base}/.well-known/ssd-key.json`,
-  ];
-  return tryCards(candidates);
-}
-
 async function resolveUrl(uri) {
   return tryCards([uri]);
 }
@@ -128,10 +115,9 @@ async function resolveKeyHint(keyHint) {
     case 'fp':
       // Already-in-keyring hint; nothing to fetch.
       return null;
-    case 'fb': {
-      const card = await resolveFb(rest);
-      return card ? { card, source: 'profile' } : null;
-    }
+    case 'fb':
+      // fb: hint is a human-readable signer label, not a fetchable URL.
+      return null;
     case 'url': {
       const card = await resolveUrl(rest);
       return card ? { card, source: 'url' } : null;

@@ -64,16 +64,22 @@ const verifier = {
     // TRUNCATED check: pre-token content too short to hash reliably.
     const tokenIdx = rawPostText.lastIndexOf('—SSD·');
     const preToken = (tokenIdx !== -1 ? rawPostText.slice(0, tokenIdx) : rawPostText).trim();
+    console.debug('[SSD:verify] preToken length:', preToken.length, 'threshold:', this.TRUNCATION_THRESHOLD);
     if (preToken.length < this.TRUNCATION_THRESHOLD) {
+      console.debug('[SSD:verify] → TRUNCATED');
       return { ...base, state: 'TRUNCATED' };
     }
 
     // Canonicalise → content hash.
-    const { contentHash } = await canon.canonicalise(rawPostText);
+    const { canonicalText, contentHash } = await canon.canonicalise(rawPostText);
+    console.debug('[SSD:verify] contentHash:', contentHash);
+    console.debug('[SSD:verify] canonicalText:', canonicalText.slice(0, 120).replace(/\n/g, '↵'));
 
     // Resolve the signer's key.
     const key = await this.resolveKey(parsed.fingerprint, parsed.keyHint);
+    console.debug('[SSD:verify] key resolved:', key ? key.fingerprint : null);
     if (!key) {
+      console.debug('[SSD:verify] → KEY_UNREACHABLE');
       return { ...base, state: 'KEY_UNREACHABLE' };
     }
 
@@ -100,6 +106,7 @@ const verifier = {
     const payload = canon.buildPayload(
       parsed.fingerprint, parsed.keyHint, contentHash, parsed.timestamp
     );
+    console.debug('[SSD:verify] payload:', payload);
 
     let valid = false;
     try {
@@ -111,9 +118,11 @@ const verifier = {
         this.b64ToBytes(signature),
         new TextEncoder().encode(payload)
       );
-    } catch {
+    } catch (err) {
+      console.debug('[SSD:verify] crypto.subtle.verify threw:', err);
       valid = false;
     }
+    console.debug('[SSD:verify] valid:', valid);
 
     if (valid) {
       if (keyring.isExpired(key, parsed.timestamp)) {

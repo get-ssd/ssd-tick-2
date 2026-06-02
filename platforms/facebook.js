@@ -42,21 +42,28 @@ const facebook = {
     window.addEventListener('popstate', this._popstateHandler);
   },
 
+  // Inject badgeElement near the anchor node. Returns the badge that is in the
+  // DOM — either the newly injected one, or an existing one from a prior scan.
   injectIndicator(anchorNode, badgeElement) {
-    // Walk up to a semantic post container if one exists above the anchor.
     const parent = anchorNode.parentElement || anchorNode.parentNode;
     const container =
       (parent && parent.closest && parent.closest('[role="article"]')) ||
       (parent && parent.closest && parent.closest('[role="main"]')) ||
       parent;
 
-    if (!container) return;
+    console.debug('[SSD:inject] container:', container ? container.nodeName : null, container ? container.getAttribute && container.getAttribute('role') : null);
+    if (!container) { console.debug('[SSD:inject] no container — bailing'); return null; }
 
-    // Guard: don't inject twice into the same container.
-    if (container.querySelector && container.querySelector('.ssd-indicator')) return;
+    const existing = container.querySelector && container.querySelector('.ssd-indicator');
+    if (existing) {
+      console.debug('[SSD:inject] returning existing .ssd-indicator');
+      return existing;
+    }
 
     if (container.style) container.style.position = 'relative';
     container.appendChild(badgeElement);
+    console.debug('[SSD:inject] badge appended, state:', badgeElement.dataset.ssdState);
+    return badgeElement;
   },
 
   cleanup() {
@@ -163,22 +170,38 @@ const facebook = {
   // is the nearest [role="article"]; we take that container's textContent so
   // canonicalisation sees exactly what the user sees (incl. "See more" text).
   function readPostText(textNode) {
+    const tokenText = textNode.textContent;
+    console.debug('[SSD:readPost] token text length:', tokenText.length);
+
+    // Walk up from the token's text node. At each level log what we see.
+    // The post body lives in sibling elements — so the first ancestor whose
+    // textContent is meaningfully longer than the token alone is the container
+    // that holds both the post text and the token.
     let el = textNode.parentElement;
     let container = null;
+    let level = 0;
     while (el && el !== document.body) {
-      if (el.getAttribute && el.getAttribute('role') === 'article') { container = el; break; }
-      el = el.parentElement;
-    }
-    if (!container) {
-      // No article ancestor — fall back to the smallest ancestor that contains
-      // enough text around the token to be meaningful.
-      el = textNode.parentElement;
-      while (el && el !== document.body) {
-        if ((el.textContent || '').trim().length >= 20) { container = el; break; }
-        el = el.parentElement;
+      const full = el.textContent || '';
+      const nonToken = full.length - tokenText.length;
+      console.debug('[SSD:readPost] L' + level, el.nodeName,
+        el.getAttribute && el.getAttribute('role') ? 'role=' + el.getAttribute('role') : '',
+        'full:', full.length, 'non-token:', nonToken,
+        'sample:', full.slice(0, 80).replace(/\n/g, '↵'));
+      if (nonToken >= 20) {
+        container = el;
+        console.debug('[SSD:readPost] → container found at L' + level);
+        break;
       }
+      el = el.parentElement;
+      level++;
     }
-    return (container ? container.textContent : textNode.textContent) || '';
+
+    if (!container) {
+      console.debug('[SSD:readPost] no container found — falling back to textNode.textContent');
+    }
+    const result = (container ? container.textContent : tokenText) || '';
+    console.debug('[SSD:readPost] result:', result.length, 'chars, preview:', result.slice(0, 120).replace(/\n/g, '↵'));
+    return result;
   }
 
   // Handle a 3-field key declaration token: —SSD·{fingerprint}·{value}—
@@ -245,21 +268,36 @@ const facebook = {
     try {
       const jobs = [];
       textScanner.scan(
-        (textNode, parsedToken) => { jobs.push({ textNode, parsedToken }); },
+        (textNode, parsedToken, commit) => { jobs.push({ textNode, parsedToken, commit }); },
         (fingerprint, value, textNode) => handleKeyDeclaration(fingerprint, value, textNode)
       );
-      for (const { textNode, parsedToken } of jobs) {
+      console.debug('[SSD:fb] scan complete, jobs:', jobs.length);
+      for (const { textNode, parsedToken, commit } of jobs) {
+        // Inject a SCANNING badge immediately so the user sees it straight away.
+        const scanningEl = badge.create({
+          state: 'SCANNING', fingerprint: parsedToken.fingerprint,
+          keyHint: parsedToken.keyHint, signerName: null, trustLevel: null,
+          timestamp: parsedToken.timestamp, isShort: parsedToken.isShort, vaultUsed: false,
+        });
+        const badgeEl = facebook.injectIndicator(textNode, scanningEl) || scanningEl;
+
         const rawPostText = readPostText(textNode);
+        console.debug('[SSD:fb] rawPostText length:', rawPostText.length, 'preview:', rawPostText.slice(0, 80).replace(/\n/g, '↵'));
         let result;
         try {
           result = await verifier.verify(parsedToken.raw, rawPostText);
         } catch (err) {
           console.error('[SSD] verify failed', err);
-          continue;
+          result = {
+            state: 'INVALID', fingerprint: parsedToken.fingerprint,
+            keyHint: parsedToken.keyHint, signerName: null, trustLevel: null,
+            timestamp: parsedToken.timestamp, isShort: false, vaultUsed: false,
+          };
         }
+        console.debug('[SSD:fb] verify result:', result.state, 'fp:', result.fingerprint);
         result._rawPostText = rawPostText;
-        const el = badge.create(result);
-        facebook.injectIndicator(textNode, el);
+        badge.update(badgeEl, result);
+        if (result.state !== 'TRUNCATED') commit();
       }
     } finally {
       scanning = false;
