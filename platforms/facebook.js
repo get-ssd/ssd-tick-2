@@ -181,15 +181,73 @@ const facebook = {
     return (container ? container.textContent : textNode.textContent) || '';
   }
 
+  // Handle a 3-field key declaration token: —SSD·{fingerprint}·{value}—
+  // value is either a 44-char base64 raw Ed25519 public key or an https:// URL.
+  // Injects a trust badge near the declaration — key is only imported on click.
+  function handleKeyDeclaration(fingerprint, value, anchorNode) {
+    if (keyring.has(fingerprint)) return;
+
+    const isUrl    = /^https?:\/\//.test(value);
+    const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(value);
+    if (!isUrl && !isBase64) return;
+
+    // Find a container to anchor the badge to.
+    const parent = anchorNode.parentElement || anchorNode.parentNode;
+    if (!parent) return;
+    if (parent.querySelector && parent.querySelector('.ssd-trust-btn[data-fp="' + fingerprint + '"]')) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'ssd-trust-btn ssd-indicator';
+    btn.dataset.fp = fingerprint;
+    btn.dataset.ssdState = 'KEY_DECLARATION';
+    btn.setAttribute('title', `SSD key declaration — click to trust this signer (${fingerprint})`);
+    btn.textContent = '🔑 Trust key';
+
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = 'Importing…';
+      try {
+        if (isUrl) {
+          await chrome.runtime.sendMessage({ type: 'resolveKey', fingerprint, keyHint: `url:${value}` });
+          await keyring.load();
+        } else {
+          const title = document.title.split('|');
+          const name  = (title.length >= 2 && title[0].trim()) ? title[0].trim() : fingerprint;
+          await keyring.put({
+            fingerprint, name, public_key: value,
+            signing_algorithm: 'Ed25519',
+            issued: null, expires: null, self_signed: null,
+            imported_at: new Date().toISOString(),
+            source: 'profile',
+            vouched_by: null, bundle_name: null, credibility: null, vault: null, token_default: null,
+          });
+        }
+        btn.textContent = '✓ Key trusted';
+        btn.dataset.ssdState = 'VALID';
+        // Re-scan so any signed posts on the page now verify green.
+        onNewContent();
+      } catch (err) {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+        console.error('[SSD] key import failed', err);
+      }
+    });
+
+    parent.style.position = 'relative';
+    parent.appendChild(btn);
+  }
+
   let scanning = false;
   async function onNewContent() {
     if (scanning) return;
     scanning = true;
     try {
       const jobs = [];
-      textScanner.scan((textNode, parsedToken) => {
-        jobs.push({ textNode, parsedToken });
-      });
+      textScanner.scan(
+        (textNode, parsedToken) => { jobs.push({ textNode, parsedToken }); },
+        (fingerprint, value, textNode) => handleKeyDeclaration(fingerprint, value, textNode)
+      );
       for (const { textNode, parsedToken } of jobs) {
         const rawPostText = readPostText(textNode);
         let result;

@@ -8,9 +8,11 @@
 
 const textScanner = {
 
-  // Scan the DOM for tokens. For each selected (last-in-context) token, call
-  // callback(textNode, parsedToken).
-  scan(callback) {
+  // Scan the DOM for tokens. For each selected (last-in-context) 4-field
+  // content-signature token, call callback(textNode, parsedToken).
+  // For 3-field key-declaration tokens (—SSD·fp·value—), call
+  // onKeyDeclaration(fingerprint, value) if provided.
+  scan(callback, onKeyDeclaration) {
     // Quick bail: if the page has no token at all, do nothing (avoids walking
     // the whole DOM on token-free pages → no console noise, cheap).
     if (document.body.textContent.indexOf('—SSD·') === -1) return;
@@ -49,7 +51,16 @@ const textScanner = {
       const matches = [];
       while ((match = pattern.exec(text)) !== null) {
         const parsed = tokenParser.parse(match[0]);
-        if (parsed) matches.push({ raw: match[0], parsed });
+        if (parsed) {
+          matches.push({ raw: match[0], parsed });
+        } else if (onKeyDeclaration) {
+          // 3-field key declaration: —SSD·{fingerprint}·{value}—
+          const inner = match[0].slice(5, -1);
+          const parts = inner.split('·');
+          if (parts.length === 2 && parts[0] && parts[1]) {
+            onKeyDeclaration(parts[0], parts[1], node);
+          }
+        }
       }
       if (!matches.length) continue;
 

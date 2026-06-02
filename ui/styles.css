@@ -114,6 +114,19 @@
 }
 .ssd-popup-btn:hover { border-color: #c8a96e; }
 
+/* ── Key trust button (key declaration on profile pages) ─────────────────── */
+
+.ssd-trust-btn {
+  --ssd-colour: #c8a96e;
+  border: none;
+  background: none;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px 1px 5px;
+}
+.ssd-trust-btn:disabled { opacity: 0.6; cursor: default; }
+.ssd-trust-btn[data-ssd-state="VALID"] { --ssd-colour: #4caf77; }
+
 /* ── Sign button (compose side) ───────────────────────────────────────────── */
 
 .ssd-sign-btn {
