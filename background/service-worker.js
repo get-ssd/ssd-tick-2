@@ -160,14 +160,15 @@ async function resolveKeyHint(keyHint) {
 //      via externally_connectable.
 //   4. Worker resolves the pending request and returns { ok, signature } to the content script.
 //
-// PWA URL: configured via chrome.storage.local key 'pwaUrl'; defaults to https://localhost/.
+// PWA URL: configured via chrome.storage.local key 'pwaUrl'; defaults to https://idltd.github.io/SignedSealedDelivered.
+// The extension opens sign.html (the dedicated signing endpoint) — index.html is the standalone PWA.
 
 const _pendingSign = new Map(); // requestId → { resolve, reject, timeoutId }
 const SIGN_TIMEOUT_MS = 120_000;
 
 async function getPwaUrl() {
   const data = await chrome.storage.local.get('pwaUrl');
-  return (data.pwaUrl || 'https://localhost').replace(/\/+$/, '');
+  return (data.pwaUrl || 'https://idltd.github.io/SignedSealedDelivered').replace(/\/+$/, '');
 }
 
 async function handleSignRequest(payload) {
@@ -175,17 +176,16 @@ async function handleSignRequest(payload) {
   const pwaBase = await getPwaUrl();
 
   const params = new URLSearchParams({
-    action:      'sign',
-    request_id:  requestId,
-    ext_id:      chrome.runtime.id,
-    fingerprint: payload.fingerprint,
+    request_id:     requestId,
+    ext_id:         chrome.runtime.id,
+    fingerprint:    payload.fingerprint,
     signed_payload: payload.signedPayload,
-    platform:    payload.platform || '',
-    preview:     payload.previewText || '',
+    platform:       payload.platform || '',
+    preview:        payload.previewText || '',
   });
 
   await chrome.windows.create({
-    url:    `${pwaBase}/sign?${params}`,
+    url:    `${pwaBase}/sign.html?${params}`,
     type:   'popup',
     width:  440,
     height: 640,
