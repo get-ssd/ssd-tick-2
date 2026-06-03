@@ -156,39 +156,52 @@ function showMessage(text, isError) {
   el.className = isError ? 'error' : 'success';
 }
 
-async function loadPwaUrl() {
-  const data = await chrome.storage.local.get('pwaUrl');
-  const url  = data.pwaUrl || '';
-  const btn  = document.getElementById('open-pwa-btn');
-  const input = document.getElementById('pwa-url-input');
-  if (input) input.value = url;
-  if (btn) btn.style.display = url ? '' : 'none';
-  return url;
+async function savePwaUrl(raw) {
+  const msgEl = document.getElementById('pwa-message');
+  raw = (raw || '').trim().replace(/\/+$/, '');
+  if (raw && !raw.startsWith('http')) {
+    msgEl.textContent = 'URL must start with https:// or http://';
+    msgEl.style.color = 'var(--danger)';
+    return;
+  }
+  await chrome.storage.local.set({ pwaUrl: raw });
+  msgEl.textContent = raw ? 'Saved.' : 'Cleared.';
+  msgEl.style.color = 'var(--text-muted)';
+  setTimeout(() => { msgEl.textContent = ''; }, 2000);
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderKeys(await getKeystore());
-  await loadPwaUrl();
 
+  // Populate the URL input from storage on open.
+  const stored = await chrome.storage.local.get('pwaUrl');
+  const urlInput = document.getElementById('pwa-url-input');
+  if (urlInput && stored.pwaUrl) urlInput.value = stored.pwaUrl;
+
+  // Open SSD button — always visible; if no URL saved, scroll to the setting.
   document.getElementById('open-pwa-btn').addEventListener('click', async () => {
     const data = await chrome.storage.local.get('pwaUrl');
-    if (data.pwaUrl) chrome.tabs.create({ url: data.pwaUrl });
+    if (data.pwaUrl) {
+      chrome.tabs.create({ url: data.pwaUrl });
+    } else {
+      const section = document.getElementById('pwa-section');
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth' });
+        section.style.outline = '1px solid var(--primary)';
+        setTimeout(() => { section.style.outline = ''; }, 1500);
+      }
+    }
   });
 
-  document.getElementById('pwa-url-save').addEventListener('click', async () => {
-    const input = document.getElementById('pwa-url-input');
-    const msgEl = document.getElementById('pwa-message');
-    const raw   = (input.value || '').trim().replace(/\/+$/, '');
-    if (raw && !raw.startsWith('http')) {
-      msgEl.textContent = 'URL must start with https:// or http://';
-      msgEl.style.color = 'var(--danger)';
-      return;
-    }
-    await chrome.storage.local.set({ pwaUrl: raw });
-    await loadPwaUrl();
-    msgEl.textContent = raw ? 'Saved.' : 'Cleared — Open SSD hidden.';
-    msgEl.style.color = 'var(--text-muted)';
-    setTimeout(() => { msgEl.textContent = ''; }, 2000);
+  // Save on button click or on blur (auto-save when user leaves the field).
+  document.getElementById('pwa-url-save').addEventListener('click', () => {
+    savePwaUrl(document.getElementById('pwa-url-input').value);
+  });
+  document.getElementById('pwa-url-input').addEventListener('blur', function() {
+    savePwaUrl(this.value);
+  });
+  document.getElementById('pwa-url-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') savePwaUrl(this.value);
   });
 
   document.getElementById('import-btn').addEventListener('click', async () => {
