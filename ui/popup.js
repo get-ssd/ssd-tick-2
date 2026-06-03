@@ -38,10 +38,20 @@ const verificationPopup = {
   _statusHtml(result) {
     switch (result.state) {
       case 'VALID':
-      case 'VALID_UNKNOWN':
         return `
           <div class="ssd-pop-line ok">✓ Signature valid</div>
           <div class="ssd-pop-line ok">✓ Content unmodified</div>`;
+      case 'VALID_UNKNOWN': {
+        const url    = platforms.hintUrl(result.keyHint);
+        const action = platforms.hintLabel(result.keyHint);
+        return `
+          <div class="ssd-pop-line ok">✓ Signature valid</div>
+          <div class="ssd-pop-line ok">✓ Content unmodified</div>
+          <div class="ssd-pop-warn neutral" style="margin-top:6px">
+            <strong>Signer not in your contacts</strong>
+            ${url ? `<div style="margin-top:4px"><a href="${this.esc(url)}" target="_blank" rel="noopener" class="ssd-pop-link">${this.esc(action)}</a></div>` : ''}
+          </div>`;
+      }
       case 'MISMATCH':
         return `
           <div class="ssd-pop-warn danger">
@@ -65,13 +75,19 @@ const verificationPopup = {
             <div>This post uses a short token. The vault needed to verify it
             could not be reached. The post cannot be verified at this time.</div>
           </div>`;
-      case 'KEY_UNREACHABLE':
+      case 'KEY_UNREACHABLE': {
+        const url    = platforms.hintUrl(result.keyHint);
+        const action = platforms.hintLabel(result.keyHint);
         return `
           <div class="ssd-pop-warn neutral">
-            <strong>~ Key not found</strong>
-            <div>The signer's key could not be resolved from the token's key
-            hint. Import their key to verify this post.</div>
+            <strong>~ Signer's key not in your keyring</strong>
+            ${url
+              ? `<div style="margin-top:6px"><a href="${this.esc(url)}" target="_blank" rel="noopener" class="ssd-pop-link">${this.esc(action)}</a></div>
+                 <div style="margin-top:4px;font-size:11px;opacity:.7">Look for the 🔑 Trust key button on their profile, then reload this page.</div>`
+              : '<div>Import their key card to verify this post.</div>'
+            }
           </div>`;
+      }
       case 'EXPIRED':
         return `
           <div class="ssd-pop-line ok">✓ Signature valid</div>

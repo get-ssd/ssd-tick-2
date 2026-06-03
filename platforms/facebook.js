@@ -10,6 +10,11 @@
 // The content-script bootstrap (at the bottom of this file) wires the scanner,
 // verifier and badge together: it is the single place that orchestrates a scan.
 
+platforms.register('fb', {
+  profileUrl: handle => `https://www.facebook.com/${encodeURIComponent(handle)}`,
+  label: 'Visit their Facebook profile to import key',
+});
+
 const facebook = {
   id: 'facebook',
   name: 'Facebook',

@@ -25,6 +25,7 @@
         "core/signer.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
+        "core/platforms.js",
         "ui/badge.js",
         "ui/popup.js",
         "test/bootstrap.js"
@@ -43,6 +44,7 @@
         "core/signer.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
+        "core/platforms.js",
         "ui/badge.js",
         "ui/popup.js",
         "platforms/facebook.js"

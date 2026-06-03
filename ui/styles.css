@@ -71,6 +71,8 @@
 .ssd-pop-warn.danger  { background: rgba(224, 80, 80, 0.12);  color: #e05050; }
 .ssd-pop-warn.warn    { background: rgba(232, 160, 32, 0.12); color: #e8a020; }
 .ssd-pop-warn.neutral { background: rgba(120, 120, 120, 0.12); color: #aaa; }
+.ssd-pop-link { color: #c8a96e; text-decoration: underline; font-size: 12px; }
+.ssd-pop-link:hover { color: #b8935a; }
 
 .ssd-popup-detail {
   padding: 6px 14px 10px;
