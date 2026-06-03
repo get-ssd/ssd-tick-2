@@ -70,16 +70,18 @@ const verifier = {
       return { ...base, state: 'TRUNCATED' };
     }
 
-    // Canonicalise → content hash.
-    const { canonicalText, contentHash } = await canon.canonicalise(rawPostText);
+    // Canonicalise using hash8-guided guessing.
+    // _canonWithGuesses tries a few line-break normalisations cheaply; hash8
+    // (first 8 hex chars of SHA-256) identifies which one was signed.
+    // Returns null when hash8 is present but none of the guesses match.
+    const canonResult = await this._canonWithGuesses(rawPostText, parsed.hash8);
+    if (!canonResult) {
+      console.debug('[SSD:verify] → MISMATCH (no line-break variant matched hash8)');
+      return { ...base, state: 'MISMATCH' };
+    }
+    const { canonicalText, contentHash } = canonResult;
     console.debug('[SSD:verify] contentHash:', contentHash);
     console.debug('[SSD:verify] canonicalText:', canonicalText.slice(0, 120).replace(/\n/g, '↵'));
-
-    // hash8 is a hint only — log it but don't short-circuit on mismatch.
-    if (parsed.hash8) {
-      console.debug('[SSD:verify] hash8 check:', parsed.hash8, 'computed:', contentHash.slice(0, 8),
-        parsed.hash8 === contentHash.slice(0, 8) ? '✓' : '≠ (hint only)');
-    }
 
     // Resolve the signer's key.
     const key = await this.resolveKey(parsed.fingerprint, parsed.keyHint);
@@ -196,6 +198,23 @@ const verifier = {
     } catch {
       return false;
     }
+  },
+
+  // Try a small set of line-break normalisations and return the first whose
+  // hash8 prefix matches expectedHash8. Returns null if none match (or if
+  // expectedHash8 is absent, returns the as-is result immediately).
+  async _canonWithGuesses(rawText, expectedHash8) {
+    const variants = [
+      rawText,                           // 1. as-is (extraction matched signed text)
+      rawText.replace(/\n{2,}/g, '\n'), // 2. collapse blank lines (some views strip them)
+    ];
+    for (const v of variants) {
+      const result = await canon.canonicalise(v);
+      const h8 = result.contentHash.slice(0, 8);
+      console.debug('[SSD:verify] guess hash8:', h8, expectedHash8 ? (h8 === expectedHash8 ? '✓' : '✗') : '(no hint)');
+      if (!expectedHash8 || h8 === expectedHash8) return result;
+    }
+    return null;
   },
 
   _result(state, fingerprint) {

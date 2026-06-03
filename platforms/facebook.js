@@ -154,39 +154,76 @@ const facebook = {
 (function bootstrapFacebook() {
   if (!facebook.hostnames.includes(location.hostname)) return;
 
-  // Read the post's raw text by walking up from the token's text node.
-  function readPostText(textNode) {
-    const tokenText = textNode.textContent;
-    console.debug('[SSD:readPost] token text length:', tokenText.length);
+  // Block-level HTML elements — their boundaries become \n in extracted text,
+  // mirroring what el.innerText (used at signing time in sign-button._readCompose)
+  // produces. Without this, paragraph breaks in Facebook posts are lost and
+  // the content hash never matches what was signed.
+  const BLOCK_TAGS = new Set([
+    'ADDRESS','ARTICLE','ASIDE','BLOCKQUOTE','DD','DIV','DL','DT',
+    'FIELDSET','FIGCAPTION','FIGURE','FOOTER','FORM',
+    'H1','H2','H3','H4','H5','H6',
+    'HEADER','HGROUP','LI','MAIN','NAV','OL','P',
+    'PRE','SECTION','SUMMARY','TABLE','TD','TH','TR','UL',
+  ]);
 
-    // Walk up from the token's text node. At each level log what we see.
-    // The post body lives in sibling elements — so the first ancestor whose
-    // textContent is meaningfully longer than the token alone is the container
-    // that holds both the post text and the token.
+  // Recursively extract text from the Facebook post DOM.
+  //
+  // Facebook uses two levels of block structure:
+  //   <div dir="auto"> — a single line (soft-return within a paragraph) → \n
+  //   other block divs  — a paragraph wrapper (hard Enter / blank line)  → \n\n
+  //
+  // This matches the compose-side behaviour: Shift+Enter produces a sibling
+  // <div dir="auto"> (→ \n), Enter produces a new outer wrapper (→ \n\n).
+  function extractText(el) {
+    let out = '';
+    for (const node of el.childNodes) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        out += node.nodeValue;
+      } else if (node.nodeName === 'BR') {
+        out += '\n';
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        const tag = node.nodeName;
+        if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue;
+        const inner = extractText(node);
+        if (BLOCK_TAGS.has(tag) && inner !== '') {
+          // <div dir="..."> = line-level (soft return) → single \n boundary
+          // other block     = paragraph-level (hard return) → double \n boundary
+          const isLine = tag === 'DIV' && node.hasAttribute('dir');
+          if (out.length > 0) {
+            if (!out.endsWith('\n')) out += '\n';
+            if (!isLine && !out.endsWith('\n\n')) out += '\n';
+          }
+          out += inner;
+          if (!out.endsWith('\n')) out += '\n';
+          if (!isLine && !out.endsWith('\n\n')) out += '\n';
+        } else {
+          out += inner;
+        }
+      }
+    }
+    return out;
+  }
+
+  // Walk up from the token text node to find the post body.
+  // Takes only the text that appears BEFORE the token in the extracted text —
+  // this excludes badge text (appended after the token's parent) and any
+  // Facebook UI that follows the token ("See less", engagement buttons, etc.).
+  // Returns '' if no suitable container is found.
+  function readPostText(textNode, tokenRaw) {
     let el = textNode.parentElement;
-    let container = null;
-    let level = 0;
     while (el && el !== document.body) {
-      const full = el.textContent || '';
-      const nonToken = full.length - tokenText.length;
-      console.debug('[SSD:readPost] L' + level, el.nodeName,
-        'full:', full.length, 'non-token:', nonToken,
-        'sample:', full.slice(0, 80).replace(/\n/g, '↵'));
-      if (nonToken >= 20) {
-        container = el;
-        console.debug('[SSD:readPost] → container found at L' + level);
-        break;
+      const full = extractText(el);
+      const idx = full.lastIndexOf(tokenRaw);
+      if (idx >= 10) {
+        const pre = full.slice(0, idx).trim();
+        console.debug('[SSD:readPost]', el.nodeName, 'pre-token:', pre.length,
+          '»', pre.slice(0, 60).replace(/\n/g, '↵'));
+        return pre;
       }
       el = el.parentElement;
-      level++;
     }
-
-    if (!container) {
-      console.debug('[SSD:readPost] no container found — falling back to textNode.textContent');
-    }
-    const result = (container ? container.textContent : tokenText) || '';
-    console.debug('[SSD:readPost] result:', result.length, 'chars, preview:', result.slice(0, 120).replace(/\n/g, '↵'));
-    return result;
+    console.debug('[SSD:readPost] no container found');
+    return '';
   }
 
   // Handle a 3-field key declaration token: —SSD·{fingerprint}·{value}—
@@ -253,11 +290,18 @@ const facebook = {
     try {
       const jobs = [];
       textScanner.scan(
-        (textNode, parsedToken, commit) => { jobs.push({ textNode, parsedToken, commit }); },
+        (textNode, parsedToken, commit) => {
+          // Capture post text NOW, before any badge injection touches the DOM.
+          // On the individual post page, badge injection can trigger a React
+          // re-render that detaches the original text node, leaving
+          // textNode.parentElement null when readPostText runs later.
+          const rawPostText = parsedToken ? readPostText(textNode, parsedToken.raw) : '';
+          jobs.push({ textNode, parsedToken, commit, rawPostText });
+        },
         (fingerprint, value, textNode) => handleKeyDeclaration(fingerprint, value, textNode)
       );
       console.debug('[SSD:fb] scan complete, jobs:', jobs.length);
-      for (const { textNode, parsedToken, commit } of jobs) {
+      for (const { textNode, parsedToken, commit, rawPostText } of jobs) {
         // Inject SCANNING badge immediately — even for unrecognised token formats.
         const scanningEl = badge.create({
           state: 'SCANNING',
@@ -277,7 +321,6 @@ const facebook = {
           continue;
         }
 
-        const rawPostText = readPostText(textNode);
         console.debug('[SSD:fb] rawPostText length:', rawPostText.length, 'preview:', rawPostText.slice(0, 80).replace(/\n/g, '↵'));
         let result;
         try {
@@ -293,7 +336,7 @@ const facebook = {
         console.debug('[SSD:fb] verify result:', result.state, 'fp:', result.fingerprint);
         result._rawPostText = rawPostText;
         badge.update(badgeEl, result);
-        if (result.state !== 'TRUNCATED') commit();
+        commit();
       }
     } finally {
       scanning = false;
