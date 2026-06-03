@@ -108,9 +108,19 @@ const verificationPopup = {
     }
   },
 
+  // Signer display: name if known, hint as fallback, 'Unknown' as last resort.
+  _signerLabel(result) {
+    if (result.signerName) return result.signerName;
+    if (result.keyHint)    return result.keyHint;
+    return 'Unknown';
+  },
+
   // Show the popup anchored to the badge element.
-  show(anchorEl, result) {
+  async show(anchorEl, result) {
     this.remove();
+
+    const stored = await chrome.storage.local.get('pwaUrl');
+    const pwaUrl = stored.pwaUrl ? stored.pwaUrl.replace(/\/+$/, '') : null;
 
     const rect = anchorEl.getBoundingClientRect();
     const el = document.createElement('div');
@@ -129,14 +139,15 @@ const verificationPopup = {
       ${showDetail || result.fingerprint ? `
       <div class="ssd-popup-detail">
         <div class="ssd-popup-row"><span>Signed</span><span>${this.esc(this._fmtTimestamp(result.timestamp))}</span></div>
-        <div class="ssd-popup-row"><span>Signer</span><span>${this.esc(result.signerName || 'Unknown')}</span></div>
+        <div class="ssd-popup-row"><span>Signer</span><span>${this.esc(this._signerLabel(result))}</span></div>
         <div class="ssd-popup-row"><span>Key</span><span class="ssd-mono">${this.esc(result.fingerprint || '—')}</span></div>
+        ${showDetail ? `
         <div class="ssd-popup-row"><span>Trust</span><span>${this.esc(this._trustLabel(result.trustLevel))}</span></div>
-        <div class="ssd-popup-row"><span>Vault</span><span>${this.esc(vaultLine)}</span></div>
+        <div class="ssd-popup-row"><span>Vault</span><span>${this.esc(vaultLine)}</span></div>` : ''}
       </div>` : ''}
       <div class="ssd-popup-actions">
         <button class="ssd-popup-btn" data-act="canonical">View canonical text</button>
-        <button class="ssd-popup-btn" data-act="open">Open in SSD</button>
+        ${pwaUrl ? `<button class="ssd-popup-btn" data-act="open">Open in SSD</button>` : ''}
       </div>
     `;
 
@@ -156,10 +167,7 @@ const verificationPopup = {
     });
     el.querySelector('[data-act="open"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
-      const url = result.fingerprint
-        ? `https://localhost/ssd/verify?fp=${encodeURIComponent(result.fingerprint)}`
-        : 'https://localhost/ssd/';
-      window.open(url, '_blank');
+      window.open(pwaUrl, '_blank');
     });
 
     // Keep clicks inside the popup from closing it.
