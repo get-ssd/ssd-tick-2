@@ -104,12 +104,12 @@ function displayName(name) {
   return name;
 }
 
-// Provenance line derived from source / vouched_by / bundle_name.
+// Provenance line derived from source / vouched_by / bundle_name / key_hint.
 function provenance(key, ks) {
   switch (key.source) {
-    case 'direct':  return 'Imported directly';
-    case 'profile': return 'Fetched from profile';
-    case 'url':     return 'Fetched from token URL';
+    case 'direct':  return key.key_hint ? `Imported · ${key.key_hint}` : 'Imported directly';
+    case 'profile': return key.key_hint ? `Profile · ${key.key_hint}` : 'Fetched from profile';
+    case 'url':     return key.key_hint ? `URL · ${key.key_hint}` : 'Fetched from token URL';
     case 'bundle': {
       const voucher = key.vouched_by && ks[key.vouched_by];
       const name = voucher ? displayName(voucher.name).replace(/ · (Owner|Device)$/, '') : null;
@@ -158,6 +158,11 @@ function showMessage(text, isError) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderKeys(await getKeystore());
+
+  document.getElementById('open-pwa-btn').addEventListener('click', async () => {
+    const { url } = await chrome.runtime.sendMessage({ type: 'getPwaUrl' });
+    chrome.tabs.create({ url });
+  });
 
   document.getElementById('import-btn').addEventListener('click', async () => {
     const json = document.getElementById('key-input').value.trim();

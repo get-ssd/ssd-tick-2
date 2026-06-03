@@ -37,7 +37,19 @@
   }
 
   .brand { font-weight: 600; color: var(--primary); letter-spacing: 0.04em; }
-  #key-count { font-size: 11px; color: var(--text-muted); }
+  #key-count { font-size: 11px; color: var(--text-muted); flex: 1; margin-left: 8px; }
+  #open-pwa-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--primary);
+    border-radius: var(--radius);
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #open-pwa-btn:hover { border-color: var(--primary); background: #c8a96e18; }
 
   #key-list { padding: 4px 0; min-height: 40px; max-height: 320px; overflow-y: auto; }
 
@@ -155,6 +167,7 @@
 <div id="header">
   <span class="brand">SSD Tick</span>
   <span id="key-count">0 keys</span>
+  <button id="open-pwa-btn" title="Open SSD to sign a post">Open SSD</button>
 </div>
 
 <div id="key-list"></div>

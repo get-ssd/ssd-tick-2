@@ -15,7 +15,10 @@ const tokenParser = {
 
   PATTERN: /—SSD·[^—]+—/g,
 
-  // Returns null if string is not a valid 5-field SSD token.
+  // Returns null if string is not a recognisable SSD content-sig token.
+  // Accepts 5-field (current: fp·keyhint·hash8·sig·ts) and 4-field
+  // (legacy: fp·keyhint·sig·ts — no hash8 hint). Both use the same
+  // signing payload so verification works for both.
   parse(tokenString) {
     if (typeof tokenString !== 'string') return null;
 
@@ -25,24 +28,32 @@ const tokenParser = {
     const inner = trimmed.slice(5, -1);
     const parts = inner.split('·');
 
-    // Expect exactly: fingerprint · keyHint · hash8 · sig-or-hint · timestamp
-    if (parts.length !== 5) return null;
+    if (parts.length === 5) {
+      const [fingerprint, keyHint, hash8, sigOrHint, timestamp] = parts;
+      if (!fingerprint || !keyHint || !hash8 || !sigOrHint || !timestamp) return null;
+      const isShort = sigOrHint.startsWith('#');
+      return {
+        fingerprint, keyHint, hash8, isShort,
+        signature: isShort ? null : sigOrHint,
+        sigHint:   isShort ? sigOrHint.slice(1) : null,
+        timestamp, raw: trimmed,
+      };
+    }
 
-    const [fingerprint, keyHint, hash8, sigOrHint, timestamp] = parts;
-    if (!fingerprint || !keyHint || !hash8 || !sigOrHint || !timestamp) return null;
+    // Legacy 4-field token — no hash8 hint, but signing payload is identical.
+    if (parts.length === 4) {
+      const [fingerprint, keyHint, sigOrHint, timestamp] = parts;
+      if (!fingerprint || !keyHint || !sigOrHint || !timestamp) return null;
+      const isShort = sigOrHint.startsWith('#');
+      return {
+        fingerprint, keyHint, hash8: null, isShort,
+        signature: isShort ? null : sigOrHint,
+        sigHint:   isShort ? sigOrHint.slice(1) : null,
+        timestamp, raw: trimmed,
+      };
+    }
 
-    const isShort = sigOrHint.startsWith('#');
-
-    return {
-      fingerprint,
-      keyHint,
-      hash8,
-      isShort,
-      signature: isShort ? null : sigOrHint,
-      sigHint:   isShort ? sigOrHint.slice(1) : null,
-      timestamp,
-      raw: trimmed,
-    };
+    return null;
   },
 
   buildFull(fingerprint, keyHint, hash8, signature, timestamp) {
