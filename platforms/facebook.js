@@ -183,14 +183,19 @@ const facebook = {
           await chrome.runtime.sendMessage({ type: 'resolveKey', fingerprint, keyHint: `url:${value}` });
           await keyring.load();
         } else {
-          // Try multiple sources for the person's name — page title is most
-          // reliable on desktop; h1 covers cases where the title is just "Facebook".
+          // Key hint from URL: facebook.com/{handle} → fb:{handle}.
+          // profile.php URLs have no clean handle so key_hint stays null.
+          const pathParts  = location.pathname.split('/').filter(Boolean);
+          const urlHandle  = pathParts.length === 1 && pathParts[0] !== 'profile.php'
+            ? pathParts[0] : null;
+          const key_hint   = urlHandle ? `fb:${urlHandle}` : null;
+          // Name: page title is most reliable; h1 covers "Facebook" generic titles.
           const titleParts = document.title.split('|');
           const titleName  = titleParts.length >= 2 ? titleParts[0].trim() : '';
           const h1Name     = document.querySelector('h1')?.innerText?.trim() || '';
           const name       = titleName || h1Name || fingerprint;
           await keyring.put({
-            fingerprint, name, public_key: value,
+            fingerprint, name, key_hint, public_key: value,
             signing_algorithm: 'Ed25519',
             issued: null, expires: null, self_signed: null,
             imported_at: new Date().toISOString(),

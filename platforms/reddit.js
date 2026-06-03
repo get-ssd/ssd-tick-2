@@ -148,15 +148,19 @@ const reddit = {
           await chrome.runtime.sendMessage({ type: 'resolveKey', fingerprint, keyHint: `url:${value}` });
           await keyring.load();
         } else {
-          // Reddit user page titles: "u/username - Reddit" (new) or "overview for username" (old)
-          const title = document.title;
-          const uSlash     = title.match(/\bu\/(\w+)/i);
-          const overviewFor = title.match(/overview\s+for\s+(\w+)/i);
+          // Key hint from URL: reddit.com/user/{handle} or /u/{handle} → rd:{handle}.
+          const pathMatch  = location.pathname.match(/^\/(?:user|u)\/([-\w]+)/i);
+          const urlHandle  = pathMatch ? pathMatch[1] : null;
+          const key_hint   = urlHandle ? `rd:${urlHandle}` : null;
+          // Name from page title: "u/username - Reddit" (new) or "overview for username" (old).
+          const title       = document.title;
+          const uSlash      = title.match(/\bu\/([-\w]+)/i);
+          const overviewFor = title.match(/overview\s+for\s+([-\w]+)/i);
           const titleName   = uSlash ? `u/${uSlash[1]}` : overviewFor ? `u/${overviewFor[1]}` : '';
           const h1Name      = document.querySelector('h1')?.innerText?.trim() || '';
           const name        = titleName || h1Name || fingerprint;
           await keyring.put({
-            fingerprint, name, public_key: value,
+            fingerprint, name, key_hint, public_key: value,
             signing_algorithm: 'Ed25519',
             issued: null, expires: null, self_signed: null,
             imported_at: new Date().toISOString(),
