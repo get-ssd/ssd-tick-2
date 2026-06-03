@@ -11,8 +11,9 @@
 // verifier and badge together: it is the single place that orchestrates a scan.
 
 platforms.register('fb', {
-  profileUrl: handle => `https://www.facebook.com/${encodeURIComponent(handle)}`,
-  label: 'Visit their Facebook profile to import key',
+  profileUrl:      handle => `https://www.facebook.com/${encodeURIComponent(handle)}`,
+  label:           'Visit their Facebook profile to import key',
+  nameFromHandle:  handle => handle,   // e.g. "alice.smith" — better than a fingerprint
 });
 
 const facebook = {
@@ -182,8 +183,12 @@ const facebook = {
           await chrome.runtime.sendMessage({ type: 'resolveKey', fingerprint, keyHint: `url:${value}` });
           await keyring.load();
         } else {
-          const title = document.title.split('|');
-          const name  = (title.length >= 2 && title[0].trim()) ? title[0].trim() : fingerprint;
+          // Try multiple sources for the person's name — page title is most
+          // reliable on desktop; h1 covers cases where the title is just "Facebook".
+          const titleParts = document.title.split('|');
+          const titleName  = titleParts.length >= 2 ? titleParts[0].trim() : '';
+          const h1Name     = document.querySelector('h1')?.innerText?.trim() || '';
+          const name       = titleName || h1Name || fingerprint;
           await keyring.put({
             fingerprint, name, public_key: value,
             signing_algorithm: 'Ed25519',

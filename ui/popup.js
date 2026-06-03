@@ -108,11 +108,17 @@ const verificationPopup = {
     }
   },
 
-  // Signer display: name if known, hint as fallback, 'Unknown' as last resort.
-  _signerLabel(result) {
-    if (result.signerName) return result.signerName;
-    if (result.keyHint)    return result.keyHint;
-    return 'Unknown';
+  // Signer row: label + value, varies by whether the key is resolved.
+  _signerRow(result) {
+    if (result.signerName) {
+      // Key is known — show confirmed name.
+      return `<div class="ssd-popup-row"><span>Signer</span><span>${this.esc(result.signerName)}</span></div>`;
+    }
+    if (result.keyHint) {
+      // Key hint present but key not in keyring — show hint as a claim, not a fact.
+      return `<div class="ssd-popup-row"><span>Hint</span><span style="color:#888;font-style:italic">${this.esc(result.keyHint)}</span></div>`;
+    }
+    return '';
   },
 
   // Show the popup anchored to the badge element.
@@ -139,7 +145,7 @@ const verificationPopup = {
       ${showDetail || result.fingerprint ? `
       <div class="ssd-popup-detail">
         <div class="ssd-popup-row"><span>Signed</span><span>${this.esc(this._fmtTimestamp(result.timestamp))}</span></div>
-        <div class="ssd-popup-row"><span>Signer</span><span>${this.esc(this._signerLabel(result))}</span></div>
+        ${this._signerRow(result)}
         <div class="ssd-popup-row"><span>Key</span><span class="ssd-mono">${this.esc(result.fingerprint || '—')}</span></div>
         ${showDetail ? `
         <div class="ssd-popup-row"><span>Trust</span><span>${this.esc(this._trustLabel(result.trustLevel))}</span></div>

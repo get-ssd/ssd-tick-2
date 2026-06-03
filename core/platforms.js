@@ -40,6 +40,22 @@ const platforms = {
     if (prefix === 'url' || prefix === 'https' || prefix === 'http') return 'Fetch key from URL';
     return null;
   },
+
+  // A human-readable display name derived from the hint, to use as a key name
+  // when no better name is available (e.g. from page title). Falls back to the
+  // raw handle (without prefix), then to the full hint string.
+  nameFromHint(keyHint) {
+    if (!keyHint) return null;
+    const colon = keyHint.indexOf(':');
+    if (colon === -1) return keyHint;
+    const prefix = keyHint.slice(0, colon);
+    const handle = keyHint.slice(colon + 1);
+    if (this._map[prefix] && this._map[prefix].nameFromHandle) {
+      return this._map[prefix].nameFromHandle(handle);
+    }
+    // Generic fallback: just the handle part
+    return handle || keyHint;
+  },
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = platforms;
