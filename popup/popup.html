@@ -51,6 +51,44 @@
   }
   #open-pwa-btn:hover { border-color: var(--primary); background: #c8a96e18; }
 
+  #pwa-section {
+    border-top: 1px solid var(--border);
+    padding: 12px 14px;
+    background: var(--surface);
+  }
+  #pwa-url-row {
+    display: flex;
+    gap: 6px;
+    margin-top: 8px;
+  }
+  #pwa-url-input {
+    flex: 1;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 11px;
+    padding: 5px 8px;
+    outline: none;
+    font-family: var(--mono);
+    min-width: 0;
+  }
+  #pwa-url-input:focus { border-color: var(--primary); }
+  #pwa-url-input::placeholder { color: var(--text-muted); }
+  #pwa-url-save {
+    background: var(--primary);
+    color: #0a0a0a;
+    border: none;
+    border-radius: var(--radius);
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #pwa-url-save:hover { opacity: 0.88; }
+
   #key-list { padding: 4px 0; min-height: 40px; max-height: 320px; overflow-y: auto; }
 
   .empty {
@@ -177,6 +215,16 @@
   <textarea id="key-input" placeholder="Paste key card JSON here…"></textarea>
   <button id="import-btn">Import key card</button>
   <div id="message"></div>
+</div>
+
+<div id="pwa-section">
+  <div class="section-title">SSD App</div>
+  <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">Set the URL of your SSD app to enable signing.</div>
+  <div id="pwa-url-row">
+    <input id="pwa-url-input" type="url" placeholder="https://idltd.github.io/SignedSealedDelivered">
+    <button id="pwa-url-save">Save</button>
+  </div>
+  <div id="pwa-message" style="margin-top:6px;font-size:11px;min-height:14px;color:var(--text-muted)"></div>
 </div>
 
 <script src="popup.js"></script>

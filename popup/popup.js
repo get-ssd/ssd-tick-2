@@ -156,12 +156,39 @@ function showMessage(text, isError) {
   el.className = isError ? 'error' : 'success';
 }
 
+async function loadPwaUrl() {
+  const data = await chrome.storage.local.get('pwaUrl');
+  const url  = data.pwaUrl || '';
+  const btn  = document.getElementById('open-pwa-btn');
+  const input = document.getElementById('pwa-url-input');
+  if (input) input.value = url;
+  if (btn) btn.style.display = url ? '' : 'none';
+  return url;
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   renderKeys(await getKeystore());
+  await loadPwaUrl();
 
   document.getElementById('open-pwa-btn').addEventListener('click', async () => {
-    const { url } = await chrome.runtime.sendMessage({ type: 'getPwaUrl' });
-    chrome.tabs.create({ url });
+    const data = await chrome.storage.local.get('pwaUrl');
+    if (data.pwaUrl) chrome.tabs.create({ url: data.pwaUrl });
+  });
+
+  document.getElementById('pwa-url-save').addEventListener('click', async () => {
+    const input = document.getElementById('pwa-url-input');
+    const msgEl = document.getElementById('pwa-message');
+    const raw   = (input.value || '').trim().replace(/\/+$/, '');
+    if (raw && !raw.startsWith('http')) {
+      msgEl.textContent = 'URL must start with https:// or http://';
+      msgEl.style.color = 'var(--danger)';
+      return;
+    }
+    await chrome.storage.local.set({ pwaUrl: raw });
+    await loadPwaUrl();
+    msgEl.textContent = raw ? 'Saved.' : 'Cleared — Open SSD hidden.';
+    msgEl.style.color = 'var(--text-muted)';
+    setTimeout(() => { msgEl.textContent = ''; }, 2000);
   });
 
   document.getElementById('import-btn').addEventListener('click', async () => {

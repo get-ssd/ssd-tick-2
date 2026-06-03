@@ -140,7 +140,7 @@ async function resolveKeyHint(keyHint) {
 
 async function getPwaUrl() {
   const data = await chrome.storage.local.get('pwaUrl');
-  return (data.pwaUrl || 'https://idltd.github.io/SignedSealedDelivered').replace(/\/+$/, '');
+  return data.pwaUrl ? data.pwaUrl.replace(/\/+$/, '') : null;
 }
 
 // ── message handling ─────────────────────────────────────────────────────────
