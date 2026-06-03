@@ -96,12 +96,22 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Display name: strip O:/D: prefixes, append " · Owner" / " · Device".
-function displayName(name) {
+const PLATFORM_LABELS = { fb: 'Facebook', rd: 'Reddit' };
+
+// Display name: strip O:/D: prefixes, append role and platform.
+function displayName(key) {
+  const name = typeof key === 'string' ? key : (key.name || '');
   if (!name) return 'Unknown';
-  if (name.startsWith('O:')) return name.slice(2) + ' · Owner';
-  if (name.startsWith('D:')) return name.slice(2) + ' · Device';
-  return name;
+  let label = name;
+  let suffix = '';
+  if (label.startsWith('O:')) { label = label.slice(2); suffix = ' · Owner'; }
+  else if (label.startsWith('D:')) { label = label.slice(2); suffix = ' · Device'; }
+  if (key.key_hint) {
+    const colon = key.key_hint.indexOf(':');
+    const platform = colon !== -1 && PLATFORM_LABELS[key.key_hint.slice(0, colon)];
+    if (platform) suffix += (suffix ? ', ' : ' · ') + platform;
+  }
+  return label + suffix;
 }
 
 // Provenance line derived from source / vouched_by / bundle_name / key_hint.
@@ -112,7 +122,7 @@ function provenance(key, ks) {
     case 'url':     return key.key_hint ? `URL · ${key.key_hint}` : 'Fetched from token URL';
     case 'bundle': {
       const voucher = key.vouched_by && ks[key.vouched_by];
-      const name = voucher ? displayName(voucher.name).replace(/ · (Owner|Device)$/, '') : null;
+      const name = voucher ? displayName(voucher).replace(/ · (Owner|Device(, \w+)?)$/, '') : null;
       return name ? `From ${name}'s list` : (key.bundle_name || 'From a shared list');
     }
     default: return 'Imported';
@@ -134,7 +144,7 @@ function renderKeys(ks) {
   list.innerHTML = entries.map(k => `
     <div class="key-card">
       <div class="key-info">
-        <div class="key-name">${esc(displayName(k.name))}</div>
+        <div class="key-name">${esc(displayName(k))}</div>
         <div class="key-meta"><span class="fp">${esc(k.fingerprint)}</span> · ${esc(provenance(k, ks))}</div>
         ${k.credibility === 'debuffed' ? `<div class="key-debuff">↓ Debuffed</div>` : ''}
       </div>
