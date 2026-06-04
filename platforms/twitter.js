@@ -27,6 +27,12 @@ platforms.register('tw', {
   nameFromHandle: handle => `@${handle}`,
 });
 
+platforms.register('x', {
+  profileUrl:     handle => `https://x.com/${encodeURIComponent(handle)}`,
+  label:          'Visit their X profile to import key',
+  nameFromHandle: handle => `@${handle}`,
+});
+
 const twitter = {
   id: 'twitter',
   name: 'Twitter/X',

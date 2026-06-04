@@ -123,6 +123,7 @@ async function resolveKeyHint(keyHint) {
       return card ? { card, source: 'url' } : null;
     }
     case 'tw':
+    case 'x':
       // TODO: Twitter/X profile key resolution. Not implemented in this prompt.
       return null;
     case 'li':
