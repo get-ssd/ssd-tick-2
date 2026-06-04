@@ -152,7 +152,6 @@ const verificationPopup = {
         <div class="ssd-popup-row"><span>Vault</span><span>${this.esc(vaultLine)}</span></div>` : ''}
       </div>` : ''}
       <div class="ssd-popup-actions">
-        <button class="ssd-popup-btn" data-act="canonical">View canonical text</button>
         ${pwaUrl ? `<button class="ssd-popup-btn" data-act="open">Open in SSD</button>` : ''}
       </div>
     `;
@@ -167,10 +166,6 @@ const verificationPopup = {
     document.body.appendChild(el);
     this._el = el;
 
-    el.querySelector('[data-act="canonical"]')?.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      await this._showCanonical(el, result);
-    });
     el.querySelector('[data-act="open"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
       window.open(pwaUrl, '_blank');
@@ -178,6 +173,7 @@ const verificationPopup = {
 
     // Keep clicks inside the popup from closing it.
     el.addEventListener('click', (e) => e.stopPropagation());
+    el.addEventListener('touchend', (e) => e.stopPropagation());
 
     // Dismiss on outside click/tap.
     setTimeout(() => {
@@ -187,20 +183,6 @@ const verificationPopup = {
     }, 0);
   },
 
-  async _showCanonical(el, result) {
-    const detail = el.querySelector('.ssd-popup-detail');
-    const raw = result._rawPostText || '';
-    let text = raw;
-    try {
-      if (typeof canon !== 'undefined' && raw) {
-        text = (await canon.canonicalise(raw)).canonicalText;
-      }
-    } catch { /* show raw */ }
-    const block = document.createElement('pre');
-    block.className = 'ssd-popup-canonical';
-    block.textContent = text || '(no text available)';
-    if (detail) detail.after(block); else el.appendChild(block);
-  },
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = verificationPopup;

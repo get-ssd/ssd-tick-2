@@ -138,7 +138,7 @@ const facebook = {
   function readPostText(textNode, tokenRaw) {
     let el = textNode.parentElement;
     while (el && el !== document.body) {
-      const full = extractText(el);
+      const full = el.innerText || '';
       const idx = full.lastIndexOf(tokenRaw);
       if (idx >= 10) {
         const pre = full.slice(0, idx).trim();

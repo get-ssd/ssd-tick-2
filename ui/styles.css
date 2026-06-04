@@ -187,19 +187,3 @@
 .ssd-key-picker-item:last-child { border-bottom: none; }
 .ssd-key-picker-item:hover { background: rgba(200, 169, 110, 0.1); color: #c8a96e; }
 
-/* ── In-page verification popup (existing, kept here for reference) ─────── */
-
-.ssd-popup-canonical {
-  margin: 0;
-  padding: 10px 14px;
-  border-top: 1px solid #2a2a2a;
-  background: #0c0c0c;
-  color: #cfcfcf;
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 11px;
-  line-height: 1.4;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 220px;
-  overflow: auto;
-}
