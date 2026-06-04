@@ -1,0 +1,355 @@
+// platforms/twitter.js
+// Twitter/X platform module. PoC — lives on feature/twitter-poc for review
+// before merge. See docs/PROMPT-Twitter-Plugin-v0_1.md (v0.2).
+//
+// Sig delivery differs from all other platforms: the —SSD· token is posted as
+// an immediate self-reply, NOT inline in the tweet body. The tweet body is the
+// signed content; the reply carries the machine-readable token. Both encode the
+// same data — the card image QR is the human-readable path (future scope).
+//
+// Scan architecture: textScanner still finds all —SSD· text nodes. After each
+// text node is located, we check whether it sits inside a self-reply article
+// (reply-path) or inside the tweet body (inline-path, backwards compat).
+//
+//   reply-path:  token in reply article → body is in the preceding sibling
+//                article from the same @handle → badge on parent tweet
+//   inline-path: token in tweet body → standard walk-up readPostText → badge
+//                near the token (same as facebook.js / reddit.js)
+//
+// Lazy-loading of replies: when a reply hasn't loaded yet, textScanner simply
+// finds nothing. On the next MutationObserver cycle (when the reply loads),
+// onNewContent() fires and textScanner finds the token. No explicit pending
+// state is needed — MutationObserver provides the retry loop implicitly.
+
+platforms.register('tw', {
+  profileUrl:     handle => `https://twitter.com/${encodeURIComponent(handle)}`,
+  label:          'Visit their Twitter/X profile to import key',
+  nameFromHandle: handle => `@${handle}`,
+});
+
+const twitter = {
+  id: 'twitter',
+  name: 'Twitter/X',
+  hostnames: ['twitter.com', 'x.com'],
+
+  _observer: null,
+  _debounceTimer: null,
+  _origPushState: null,
+  _popstateHandler: null,
+
+  observe(onNewContent) {
+    onNewContent();
+
+    this._observer = new MutationObserver(() => {
+      clearTimeout(this._debounceTimer);
+      this._debounceTimer = setTimeout(() => onNewContent(), 150);
+    });
+    this._observer.observe(document.body, { childList: true, subtree: true });
+
+    this._origPushState = history.pushState.bind(history);
+    const self = this;
+    history.pushState = function (...args) {
+      self._origPushState(...args);
+      onNewContent();
+    };
+    this._popstateHandler = () => onNewContent();
+    window.addEventListener('popstate', this._popstateHandler);
+  },
+
+  // For reply-path: anchorElement is the parent tweet article — inject near
+  // its action bar so the badge reads as part of the tweet, not the reply.
+  // For inline-path: anchorElement is the token's text node; same pattern as
+  // facebook.js (append to the parent element).
+  injectIndicator(anchorElement, badgeElement) {
+    const container = anchorElement.nodeType === Node.ELEMENT_NODE
+      ? anchorElement
+      : (anchorElement.parentElement || anchorElement.parentNode);
+    if (!container) { console.debug('[SSD:tw:inject] no container'); return null; }
+
+    const existing = container.querySelector && container.querySelector('.ssd-indicator');
+    if (existing) { console.debug('[SSD:tw:inject] returning existing badge'); return existing; }
+
+    // Prefer injecting into the tweet's action toolbar (like/retweet/share row).
+    try {
+      const actionBar = container.querySelector('[role="group"]');
+      if (actionBar) {
+        actionBar.appendChild(badgeElement);
+        console.debug('[SSD:tw:inject] badge injected into action bar');
+        return badgeElement;
+      }
+    } catch { /* fall through to append */ }
+
+    container.appendChild(badgeElement);
+    console.debug('[SSD:tw:inject] badge appended to container:', container.nodeName);
+    return badgeElement;
+  },
+
+  cleanup() {
+    if (this._observer) { this._observer.disconnect(); this._observer = null; }
+    clearTimeout(this._debounceTimer);
+    if (this._origPushState) { history.pushState = this._origPushState; this._origPushState = null; }
+    if (this._popstateHandler) {
+      window.removeEventListener('popstate', this._popstateHandler);
+      this._popstateHandler = null;
+    }
+  },
+
+  // Walk up from a node to the nearest tweet article element.
+  findTweetArticle(node) {
+    try {
+      let el = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+      while (el && el !== document.body) {
+        if (el.nodeName === 'ARTICLE' && el.getAttribute('data-testid') === 'tweet') return el;
+        el = el.parentElement;
+      }
+    } catch { }
+    return null;
+  },
+
+  // Extract the @handle visible in the tweet header. Returns lowercase or null.
+  // Twitter renders the handle as link text "@username" inside the article.
+  getAuthorHandle(articleEl) {
+    try {
+      const links = articleEl.querySelectorAll('a[href^="/"]');
+      for (const link of links) {
+        const text = link.textContent.trim();
+        // Match @handle: starts with @, no spaces, at least 2 chars total.
+        if (text.startsWith('@') && text.length > 1 && !/\s/.test(text)) {
+          return text.toLowerCase();
+        }
+      }
+    } catch { }
+    return null;
+  },
+
+  // Given the article that contains the reply token, find the immediately
+  // preceding tweet article from the same @handle in the timeline.
+  // Returns the parent tweet article or null.
+  findParentTweet(replyArticle) {
+    try {
+      const replyHandle = this.getAuthorHandle(replyArticle);
+      if (!replyHandle) return null;
+
+      // Locate the timeline cell wrapping the reply article.
+      const replyCell = replyArticle.closest('[data-testid="cellInnerDiv"]')
+                     || replyArticle.parentElement;
+      if (!replyCell) return null;
+
+      // Check up to 3 preceding siblings — the immediate predecessor is the
+      // usual case, but allow for separator/connector elements between cells.
+      let prev = replyCell.previousElementSibling;
+      for (let i = 0; i < 3 && prev; i++) {
+        const article = prev.querySelector('article[data-testid="tweet"]')
+                     || (prev.matches && prev.matches('article[data-testid="tweet"]') ? prev : null);
+        if (article) {
+          if (this.getAuthorHandle(article) === replyHandle) return article;
+        }
+        prev = prev.previousElementSibling;
+      }
+    } catch { }
+    return null;
+  },
+
+  // STUB: twitter.scanCardQR(tweetElement)
+  // Future: extract QR from attached image, decode SSD token
+  // For now: QR path not implemented — token from reply only
+  scanCardQR(_tweetEl) {
+    return null;
+  },
+};
+
+// ── Content-script bootstrap ───────────────────────────────────────────────────
+
+(function bootstrapTwitter() {
+  if (!twitter.hostnames.includes(location.hostname)) return;
+
+  // Extract the post body from a tweet article using Twitter's stable
+  // data-testid="tweetText" attribute. Returns innerText or '' on failure.
+  // Truncated tweets ("Show more"): use whatever is visible. If the text was
+  // truncated at signing time, verification will produce INVALID — not a bug.
+  // The MutationObserver will re-scan if the user expands the tweet.
+  function extractTweetBody(articleEl) {
+    try {
+      const textEl = articleEl.querySelector('[data-testid="tweetText"]');
+      return textEl ? textEl.innerText.trim() : '';
+    } catch { }
+    return '';
+  }
+
+  // Inline-path text extraction: walk up from the token text node until we
+  // find a container that includes the token, then return the text before it.
+  function readPostText(textNode, tokenRaw) {
+    let el = textNode.parentElement;
+    while (el && el !== document.body) {
+      const text = el.innerText || '';
+      const idx = text.lastIndexOf(tokenRaw);
+      if (idx >= 10) {
+        const pre = text.slice(0, idx).trim();
+        console.debug('[SSD:tw:readPost]', el.nodeName, 'pre-token:', pre.length,
+          '»', pre.slice(0, 60).replace(/\n/g, '↵'));
+        return pre;
+      }
+      el = el.parentElement;
+    }
+    console.debug('[SSD:tw:readPost] no container found');
+    return '';
+  }
+
+  function handleKeyDeclaration(fingerprint, value, anchorNode) {
+    if (keyring.has(fingerprint)) return;
+
+    const isUrl    = /^https?:\/\//.test(value);
+    const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(value);
+    if (!isUrl && !isBase64) return;
+
+    const parent = anchorNode.parentElement || anchorNode.parentNode;
+    if (!parent) return;
+    if (parent.querySelector && parent.querySelector('.ssd-trust-btn[data-fp="' + fingerprint + '"]')) return;
+
+    const btn = document.createElement('button');
+    btn.className = 'ssd-trust-btn ssd-indicator';
+    btn.dataset.fp = fingerprint;
+    btn.dataset.ssdState = 'KEY_DECLARATION';
+    btn.setAttribute('title', `SSD key declaration — click to trust this signer (${fingerprint})`);
+    btn.textContent = '🔑 Trust key';
+
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      btn.disabled = true;
+      btn.textContent = 'Importing…';
+      try {
+        if (isUrl) {
+          await chrome.runtime.sendMessage({ type: 'resolveKey', fingerprint, keyHint: `url:${value}` });
+          await keyring.load();
+        } else {
+          // Key hint: derive tw:handle from the current profile URL if on one.
+          const pathMatch  = location.pathname.match(/^\/(@?[-\w]+)/);
+          const urlHandle  = pathMatch ? pathMatch[1].replace(/^@/, '') : null;
+          const key_hint   = urlHandle ? `tw:${urlHandle}` : null;
+          // Name: Twitter page titles look like "Name (@handle) / Twitter" or
+          //       "Name (@handle) / X" — extract @handle from parens.
+          const titleMatch = document.title.match(/\(@([-\w]+)\)/);
+          const name       = titleMatch ? `@${titleMatch[1]}`
+                           : (urlHandle ? `@${urlHandle}` : fingerprint);
+          await keyring.put({
+            fingerprint, name, key_hint, public_key: value,
+            signing_algorithm: 'Ed25519',
+            issued: null, expires: null, self_signed: null,
+            imported_at: new Date().toISOString(),
+            source: 'profile',
+            vouched_by: null, bundle_name: null, credibility: null, vault: null, token_default: null,
+          });
+        }
+        btn.textContent = '✓ Key trusted';
+        btn.dataset.ssdState = 'VALID';
+        onNewContent();
+      } catch (err) {
+        btn.textContent = '✗ Failed';
+        btn.disabled = false;
+        console.error('[SSD] key import failed', err);
+      }
+    });
+
+    parent.style.position = 'relative';
+    parent.appendChild(btn);
+  }
+
+  let scanning = false;
+  async function onNewContent() {
+    if (scanning) return;
+    scanning = true;
+    try {
+      const jobs = [];
+
+      textScanner.scan(
+        (textNode, parsedToken, commit) => {
+          if (!parsedToken) {
+            jobs.push({ type: 'inline', textNode, parsedToken: null, commit, rawPostText: '' });
+            return;
+          }
+
+          // Determine if this token is in a self-reply (reply-path) or in a
+          // tweet body (inline-path). Reply-path: find the article containing
+          // the token, then look for a preceding sibling article from the same
+          // @handle — that is the signed tweet.
+          const tokenArticle = twitter.findTweetArticle(textNode);
+          if (tokenArticle) {
+            const parentTweet = twitter.findParentTweet(tokenArticle);
+            if (parentTweet) {
+              // Reply-path: signed content is the parent tweet's body text.
+              // The token string itself is NOT part of the signed content;
+              // verifier.verify / canon handle rawPostText-without-token fine
+              // (CANON-1 finds no —SSD· in the body and uses all of it).
+              const bodyText = extractTweetBody(parentTweet);
+              console.debug('[SSD:tw] reply-path, body preview:',
+                bodyText.slice(0, 60).replace(/\n/g, '↵'));
+              jobs.push({ type: 'reply', textNode, parsedToken, commit,
+                          rawPostText: bodyText, badgeTarget: parentTweet });
+              return;
+            }
+          }
+
+          // Inline-path: token is in the tweet body itself.
+          const rawPostText = readPostText(textNode, parsedToken.raw);
+          jobs.push({ type: 'inline', textNode, parsedToken, commit, rawPostText });
+        },
+        (fingerprint, value, textNode) => handleKeyDeclaration(fingerprint, value, textNode)
+      );
+
+      console.debug('[SSD:tw] scan complete, jobs:', jobs.length);
+
+      for (const { type, textNode, parsedToken, commit, rawPostText, badgeTarget } of jobs) {
+
+        // Reply-path: badge goes on the parent tweet article.
+        // Inline-path: badge goes near the token text node (standard pattern).
+        const anchor = (type === 'reply' && badgeTarget) ? badgeTarget : textNode;
+
+        const scanningEl = badge.create({
+          state: 'SCANNING',
+          fingerprint: parsedToken ? parsedToken.fingerprint : null,
+          keyHint:     parsedToken ? parsedToken.keyHint     : null,
+          signerName: null, trustLevel: null,
+          timestamp:   parsedToken ? parsedToken.timestamp   : null,
+          isShort:     parsedToken ? parsedToken.isShort     : false,
+          vaultUsed: false,
+        });
+        const badgeEl = twitter.injectIndicator(anchor, scanningEl) || scanningEl;
+
+        if (!parsedToken) {
+          console.debug('[SSD:tw] unrecognised token format');
+          commit();
+          continue;
+        }
+
+        console.debug('[SSD:tw]', type, 'rawPostText length:', rawPostText.length);
+
+        let result;
+        try {
+          result = await verifier.verify(parsedToken.raw, rawPostText);
+        } catch (err) {
+          console.error('[SSD] verify failed', err);
+          result = {
+            state: 'INVALID', fingerprint: parsedToken.fingerprint,
+            keyHint: parsedToken.keyHint, signerName: null, trustLevel: null,
+            timestamp: parsedToken.timestamp, isShort: false, vaultUsed: false,
+          };
+        }
+
+        console.debug('[SSD:tw] verify result:', result.state, 'fp:', result.fingerprint);
+        result._rawPostText = rawPostText;
+        badge.update(badgeEl, result);
+        commit();
+      }
+    } finally {
+      scanning = false;
+    }
+  }
+
+  keyring.load().then(() => {
+    twitter.observe(onNewContent);
+  });
+
+  window.addEventListener('unload', () => twitter.cleanup());
+})();
+
+if (typeof module !== 'undefined' && module.exports) module.exports = twitter;
