@@ -122,30 +122,37 @@ const twitter = {
     return null;
   },
 
-  // Given the article that contains the reply token, find the immediately
-  // preceding tweet article from the same @handle in the timeline.
+  // Given the article that contains the reply token, find the parent tweet
+  // article from the same @handle that appears before it in document order.
   // Returns the parent tweet article or null.
   findParentTweet(replyArticle) {
     try {
       const replyHandle = this.getAuthorHandle(replyArticle);
       if (!replyHandle) return null;
 
-      // Locate the timeline cell wrapping the reply article.
-      const replyCell = replyArticle.closest('[data-testid="cellInnerDiv"]')
-                     || replyArticle.parentElement;
-      if (!replyCell) return null;
-
-      // Check up to 3 preceding siblings — the immediate predecessor is the
-      // usual case, but allow for separator/connector elements between cells.
-      let prev = replyCell.previousElementSibling;
-      for (let i = 0; i < 3 && prev; i++) {
-        const article = prev.querySelector('article[data-testid="tweet"]')
-                     || (prev.matches && prev.matches('article[data-testid="tweet"]') ? prev : null);
-        if (article) {
-          if (this.getAuthorHandle(article) === replyHandle) return article;
+      // Strategy A: cellInnerDiv sibling walk — works on the home/profile timeline
+      // where each tweet sits in its own cellInnerDiv at the same level.
+      const replyCell = replyArticle.closest('[data-testid="cellInnerDiv"]');
+      if (replyCell) {
+        let prev = replyCell.previousElementSibling;
+        for (let i = 0; i < 3 && prev; i++) {
+          const article = prev.querySelector('article[data-testid="tweet"]')
+                       || (prev.matches && prev.matches('article[data-testid="tweet"]') ? prev : null);
+          if (article && this.getAuthorHandle(article) === replyHandle) return article;
+          prev = prev.previousElementSibling;
         }
-        prev = prev.previousElementSibling;
       }
+
+      // Strategy B: document-order scan — works on tweet detail pages where the
+      // original tweet and its replies sit in different container sections.
+      // Return the last article from the same author that precedes the reply.
+      const allArticles = document.querySelectorAll('article[data-testid="tweet"]');
+      let lastMatch = null;
+      for (const article of allArticles) {
+        if (article === replyArticle) break;
+        if (this.getAuthorHandle(article) === replyHandle) lastMatch = article;
+      }
+      return lastMatch;
     } catch { }
     return null;
   },
