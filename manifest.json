@@ -8,6 +8,8 @@
     "https://m.facebook.com/*",
     "https://www.reddit.com/*",
     "https://old.reddit.com/*",
+    "https://twitter.com/*",
+    "https://x.com/*",
     "https://idltd.github.io/*",
     "http://localhost:8080/*",
     "http://127.0.0.1:8080/*"
@@ -50,6 +52,25 @@
         "ui/badge.js",
         "ui/popup.js",
         "platforms/facebook.js"
+      ],
+      "css": ["ui/styles.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://twitter.com/*", "https://x.com/*"],
+      "js": [
+        "core/token-parser.js",
+        "core/canon.js",
+        "core/keyring.js",
+        "core/vault.js",
+        "core/verifier.js",
+        "core/signer.js",
+        "scanners/text-scanner.js",
+        "scanners/image-scanner.js",
+        "core/platforms.js",
+        "ui/badge.js",
+        "ui/popup.js",
+        "platforms/twitter.js"
       ],
       "css": ["ui/styles.css"],
       "run_at": "document_idle"
