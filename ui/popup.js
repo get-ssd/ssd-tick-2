@@ -141,6 +141,10 @@ const verificationPopup = {
       : 'Not used';
 
     el.innerHTML = `
+      <div class="ssd-popup-header">
+        <span class="ssd-popup-title">Signed · Sealed · Delivered</span>
+        <button class="ssd-popup-close" aria-label="Close">×</button>
+      </div>
       <div class="ssd-popup-status">${this._statusHtml(result)}</div>
       ${showDetail || result.fingerprint ? `
       <div class="ssd-popup-detail">
@@ -156,15 +160,24 @@ const verificationPopup = {
       </div>
     `;
 
-    // Position: fixed, below the badge, clamped to viewport.
-    const top = rect.bottom + 6;
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - 308));
-    el.style.position = 'fixed';
-    el.style.top = `${top}px`;
-    el.style.left = `${left}px`;
+    // Position: absolute in document coordinates so the popup scrolls with the
+    // page rather than staying fixed in the viewport while the badge moves away.
+    const docTop  = rect.bottom + window.scrollY + 6;
+    const docLeft = Math.max(
+      window.scrollX + 8,
+      Math.min(rect.left + window.scrollX, window.scrollX + window.innerWidth - 316)
+    );
+    el.style.position = 'absolute';
+    el.style.top  = `${docTop}px`;
+    el.style.left = `${docLeft}px`;
 
     document.body.appendChild(el);
     this._el = el;
+
+    el.querySelector('.ssd-popup-close').addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.remove();
+    });
 
     el.querySelector('[data-act="open"]')?.addEventListener('click', (e) => {
       e.stopPropagation();
