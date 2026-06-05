@@ -3,7 +3,7 @@
 // lists stored keys with provenance and credibility, imports key cards (with
 // self-signature verification), and deletes keys.
 //
-// Keystore layout in chrome.storage.local: { keystore: { [fingerprint]: keyRecord } }
+// Keystore layout in chrome.storage.local: { keystore: { [hash8]: keyRecord } }
 
 async function getKeystore() {
   const data = await chrome.storage.local.get('keystore');
@@ -43,7 +43,7 @@ async function importKeyCard(json) {
   try { card = JSON.parse(json); }
   catch { throw new Error('Not valid JSON.'); }
 
-  const required = ['fingerprint', 'name', 'public_key', 'self_signed', 'signing_algorithm'];
+  const required = ['hash8', 'name', 'public_key', 'self_signed', 'signing_algorithm'];
   const missing = required.filter(f => !card[f]);
   if (missing.length) throw new Error(`Missing fields: ${missing.join(', ')}.`);
 
@@ -54,17 +54,17 @@ async function importKeyCard(json) {
   if (!valid) throw new Error('Self-signature invalid — key card may be tampered.');
 
   const ks = await getKeystore();
-  const existing = ks[card.fingerprint];
+  const existing = ks[card.hash8];
   if (existing && existing.public_key !== card.public_key)
     throw new Error(
-      `Fingerprint ${card.fingerprint} already exists with a different public key. ` +
+      `Key ${card.hash8} already exists with a different public key. ` +
       `Delete the existing entry first if you trust the new key.`
     );
   if (existing && existing.public_key === card.public_key)
-    throw new Error(`${card.fingerprint} is already in your keystore.`);
+    throw new Error(`${card.hash8} is already in your keystore.`);
 
-  ks[card.fingerprint] = {
-    fingerprint:       card.fingerprint,
+  ks[card.hash8] = {
+    hash8:             card.hash8,
     name:              card.name,
     public_key:        card.public_key,
     signing_algorithm: card.signing_algorithm,
@@ -81,12 +81,12 @@ async function importKeyCard(json) {
   };
 
   await saveKeystore(ks);
-  return card.fingerprint;
+  return card.hash8;
 }
 
-async function deleteKey(fingerprint) {
+async function deleteKey(hash8) {
   const ks = await getKeystore();
-  delete ks[fingerprint];
+  delete ks[hash8];
   await saveKeystore(ks);
 }
 
@@ -106,20 +106,20 @@ function displayName(key) {
   let suffix = '';
   if (label.startsWith('O:')) { label = label.slice(2); suffix = ' · Owner'; }
   else if (label.startsWith('D:')) { label = label.slice(2); suffix = ' · Device'; }
-  if (key.key_hint) {
-    const colon = key.key_hint.indexOf(':');
-    const platform = colon !== -1 && PLATFORM_LABELS[key.key_hint.slice(0, colon)];
+  if (key.identity) {
+    const colon = key.identity.indexOf(':');
+    const platform = colon !== -1 && PLATFORM_LABELS[key.identity.slice(0, colon)];
     if (platform) suffix += (suffix ? ', ' : ' · ') + platform;
   }
   return label + suffix;
 }
 
-// Provenance line derived from source / vouched_by / bundle_name / key_hint.
+// Provenance line derived from source / vouched_by / bundle_name / identity.
 function provenance(key, ks) {
   switch (key.source) {
-    case 'direct':  return key.key_hint ? `Imported · ${key.key_hint}` : 'Imported directly';
-    case 'profile': return key.key_hint ? `Profile · ${key.key_hint}` : 'Fetched from profile';
-    case 'url':     return key.key_hint ? `URL · ${key.key_hint}` : 'Fetched from token URL';
+    case 'direct':  return key.identity ? `Imported · ${key.identity}` : 'Imported directly';
+    case 'profile': return key.identity ? `Profile · ${key.identity}` : 'Fetched from profile';
+    case 'url':     return key.identity ? `URL · ${key.identity}` : 'Fetched from token URL';
     case 'bundle': {
       const voucher = key.vouched_by && ks[key.vouched_by];
       const name = voucher ? displayName(voucher).replace(/ · (Owner|Device(, \w+)?)$/, '') : null;
@@ -145,16 +145,16 @@ function renderKeys(ks) {
     <div class="key-card">
       <div class="key-info">
         <div class="key-name">${esc(displayName(k))}</div>
-        <div class="key-meta"><span class="fp">${esc(k.fingerprint)}</span> · ${esc(provenance(k, ks))}</div>
+        <div class="key-meta"><span class="fp">${esc(k.hash8)}</span> · ${esc(provenance(k, ks))}</div>
         ${k.credibility === 'debuffed' ? `<div class="key-debuff">↓ Debuffed</div>` : ''}
       </div>
-      <button class="delete-btn" data-fp="${esc(k.fingerprint)}" title="Remove this key">&times;</button>
+      <button class="delete-btn" data-hash8="${esc(k.hash8)}" title="Remove this key">&times;</button>
     </div>
   `).join('');
 
   list.querySelectorAll('.delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
-      await deleteKey(btn.dataset.fp);
+      await deleteKey(btn.dataset.hash8);
       renderKeys(await getKeystore());
     });
   });

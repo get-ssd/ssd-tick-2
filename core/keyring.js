@@ -1,6 +1,6 @@
 // core/keyring.js
 // Local key storage, lookup and trust level. Backed by chrome.storage.local
-// under the "keystore" key — a flat object keyed by fingerprint. See the
+// under the "keystore" key — a flat object keyed by hash8. See the
 // Keystore Schema section of the prompt for the full record shape.
 
 const keyring = {
@@ -25,12 +25,12 @@ const keyring = {
   },
 
   // Synchronous lookup against the cache. Call load() once at startup first.
-  get(fingerprint) {
-    return this._cache[fingerprint] || null;
+  get(hash8) {
+    return this._cache[hash8] || null;
   },
 
-  has(fingerprint) {
-    return !!this._cache[fingerprint];
+  has(hash8) {
+    return !!this._cache[hash8];
   },
 
   all() {
@@ -38,20 +38,20 @@ const keyring = {
   },
 
   // Import a key record into the keystore (used by service worker auto-fetch).
-  // record must already contain a fingerprint. Returns the stored record.
+  // record must already contain a hash8. Returns the stored record.
   async put(record) {
     const data = await chrome.storage.local.get('keystore');
     const ks = data.keystore || {};
-    ks[record.fingerprint] = record;
+    ks[record.hash8] = record;
     await chrome.storage.local.set({ keystore: ks });
     this._cache = ks;
     return record;
   },
 
-  async remove(fingerprint) {
+  async remove(hash8) {
     const data = await chrome.storage.local.get('keystore');
     const ks = data.keystore || {};
-    delete ks[fingerprint];
+    delete ks[hash8];
     await chrome.storage.local.set({ keystore: ks });
     this._cache = ks;
   },
@@ -62,10 +62,10 @@ const keyring = {
   //   - vouched-for via a contact's bundle       → "bundle"
   //   - auto-fetched from a profile/URL          → "unverified"
   //   - not in keyring                           → null
-  trustLevel(fingerprintOrRecord) {
-    const key = typeof fingerprintOrRecord === 'string'
-      ? this.get(fingerprintOrRecord)
-      : fingerprintOrRecord;
+  trustLevel(hash8OrRecord) {
+    const key = typeof hash8OrRecord === 'string'
+      ? this.get(hash8OrRecord)
+      : hash8OrRecord;
     if (!key) return null;
     if (key.vault) return 'self';
     switch (key.source) {

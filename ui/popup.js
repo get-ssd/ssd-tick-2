@@ -42,8 +42,8 @@ const verificationPopup = {
           <div class="ssd-pop-line ok">✓ Signature valid</div>
           <div class="ssd-pop-line ok">✓ Content unmodified</div>`;
       case 'VALID_UNKNOWN': {
-        const url    = platforms.hintUrl(result.keyHint);
-        const action = platforms.hintLabel(result.keyHint);
+        const url    = platforms.hintUrl(result.identity);
+        const action = platforms.hintLabel(result.identity);
         return `
           <div class="ssd-pop-line ok">✓ Signature valid</div>
           <div class="ssd-pop-line ok">✓ Content unmodified</div>
@@ -76,8 +76,8 @@ const verificationPopup = {
             could not be reached. The post cannot be verified at this time.</div>
           </div>`;
       case 'KEY_UNREACHABLE': {
-        const url    = platforms.hintUrl(result.keyHint);
-        const action = platforms.hintLabel(result.keyHint);
+        const url    = platforms.hintUrl(result.identity);
+        const action = platforms.hintLabel(result.identity);
         return `
           <div class="ssd-pop-warn neutral">
             <strong>~ Signer's key not in your keyring</strong>
@@ -114,9 +114,9 @@ const verificationPopup = {
       // Key is known — show confirmed name.
       return `<div class="ssd-popup-row"><span>Signer</span><span>${this.esc(result.signerName)}</span></div>`;
     }
-    if (result.keyHint) {
-      // Key hint present but key not in keyring — show hint as a claim, not a fact.
-      return `<div class="ssd-popup-row"><span>Hint</span><span style="color:#888;font-style:italic">${this.esc(result.keyHint)}</span></div>`;
+    if (result.identity) {
+      // Identity hint present but key not in keyring — show as a claim, not a fact.
+      return `<div class="ssd-popup-row"><span>Hint</span><span style="color:#888;font-style:italic">${this.esc(result.identity)}</span></div>`;
     }
     return '';
   },
@@ -146,11 +146,11 @@ const verificationPopup = {
         <button class="ssd-popup-close" aria-label="Close">×</button>
       </div>
       <div class="ssd-popup-status">${this._statusHtml(result)}</div>
-      ${showDetail || result.fingerprint ? `
+      ${showDetail || result.hash8 ? `
       <div class="ssd-popup-detail">
         <div class="ssd-popup-row"><span>Signed</span><span>${this.esc(this._fmtTimestamp(result.timestamp))}</span></div>
         ${this._signerRow(result)}
-        <div class="ssd-popup-row"><span>Key</span><span class="ssd-mono">${this.esc(result.fingerprint || '—')}</span></div>
+        <div class="ssd-popup-row"><span>Key</span><span class="ssd-mono">${this.esc(result.hash8 || '—')}</span></div>
         ${showDetail ? `
         <div class="ssd-popup-row"><span>Trust</span><span>${this.esc(this._trustLabel(result.trustLevel))}</span></div>
         <div class="ssd-popup-row"><span>Vault</span><span>${this.esc(vaultLine)}</span></div>` : ''}

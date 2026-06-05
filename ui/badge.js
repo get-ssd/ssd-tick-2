@@ -14,7 +14,7 @@ const badge = {
     INVALID:           { colour: '#e05050', icon: '✗', label: () => 'Invalid signature' },
     TRUNCATED:         { colour: '#666666', icon: '~', label: () => 'Post cut off' },
     VAULT_UNREACHABLE: { colour: '#666666', icon: '~', label: () => 'Vault unreachable' },
-    KEY_UNREACHABLE:   { colour: '#888888', icon: '🔑', label: r => 'Signed — ' + (r.keyHint || 'key not loaded') },
+    KEY_UNREACHABLE:   { colour: '#888888', icon: '🔑', label: r => 'Signed — ' + (r.identity || 'key not loaded') },
     EXPIRED:           { colour: '#e8a020', icon: '⚠', label: () => 'Key expired' },
     REVOKED:           { colour: '#e05050', icon: '✗', label: () => 'Key revoked' },
   },

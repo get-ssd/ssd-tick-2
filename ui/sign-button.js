@@ -48,12 +48,12 @@ const signButton = {
       return;
     }
 
-    let fingerprint;
+    let hash8;
     if (keys.length === 1) {
-      fingerprint = keys[0].fingerprint;
+      hash8 = keys[0].hash8;
     } else {
-      fingerprint = await this._pickKey(btn, keys);
-      if (!fingerprint) return; // user dismissed picker
+      hash8 = await this._pickKey(btn, keys);
+      if (!hash8) return; // user dismissed picker
     }
 
     // 2. Read raw compose text, strip any existing token.
@@ -63,7 +63,7 @@ const signButton = {
     // 3. Sign.
     this._setState(btn, 'signing');
     try {
-      const { token } = await signer.sign(rawText, fingerprint, platform);
+      const { token } = await signer.sign(rawText, hash8, platform);
       // 4. Inject token as final line with blank-line separator.
       this._appendToken(composeElement, token);
       this._setState(btn, 'signed');
@@ -73,7 +73,7 @@ const signButton = {
     }
   },
 
-  // Show a floating key picker near the button; resolves to fingerprint or null.
+  // Show a floating key picker near the button; resolves to hash8 or null.
   _pickKey(btn, keys) {
     return new Promise(resolve => {
       const picker = document.createElement('div');
@@ -83,12 +83,12 @@ const signButton = {
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'ssd-key-picker-item';
-        const hint = k.key_hint || `fp:${k.fingerprint}`;
-        const label = (k.name || k.fingerprint).replace(/^[OD]:/, '');
-        item.textContent = `${label} (${k.fingerprint.slice(0, 8)}) — ${hint}`;
+        const hint = k.identity || `fp:${k.hash8}`;
+        const label = (k.name || k.hash8).replace(/^[OD]:/, '');
+        item.textContent = `${label} (${k.hash8}) — ${hint}`;
         item.addEventListener('click', () => {
           picker.remove();
-          resolve(k.fingerprint);
+          resolve(k.hash8);
         });
         picker.appendChild(item);
       }

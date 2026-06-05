@@ -11,25 +11,25 @@
 const signer = {
 
   // Full signing pipeline.
-  //   rawText     — post body text (without any existing —SSD·…— token)
-  //   fingerprint — which key to sign with
-  //   platform    — 'facebook', 'twitter', etc. (recorded in vault; no effect on sig)
+  //   rawText  — post body text (without any existing —SSD·…— token)
+  //   hash8    — key identifier: which key to sign with
+  //   platform — 'facebook', 'twitter', etc. (recorded in vault; no effect on sig)
   //
   // Returns { token, contentHash, fullSignature, canonicalText }.
   // Throws on failure (key missing, PWA cancellation, timeout, etc.).
-  async sign(rawText, fingerprint, platform) {
+  async sign(rawText, hash8, platform) {
     // 1. Canonicalise.
     const { canonicalText, contentHash } = await canon.canonicalise(rawText);
 
     // 2. Key settings.
-    const key = keyring.get(fingerprint);
-    if (!key) throw new Error(`Key not found: ${fingerprint}`);
+    const key = keyring.get(hash8);
+    if (!key) throw new Error(`Key not found: ${hash8}`);
 
-    // key_hint tells verifiers where to look up this key (e.g. 'fb:alice.smith').
-    // Falls back to 'fp:{fingerprint}' — requires verifier to already hold the key locally.
-    const keyHint = key.key_hint || `fp:${fingerprint}`;
+    // identity tells verifiers where to look up this key (e.g. 'fb:alice.smith').
+    // Falls back to 'fp:{hash8}' — requires verifier to already hold the key locally.
+    const identity = key.identity || `fp:${hash8}`;
     const tokenDefault = key.token_default || 'auto';
-    const vaultCfg = vault.getConfig(fingerprint);
+    const vaultCfg = vault.getConfig(hash8);
 
     // 3. Determine token type.
     let tokenType;
@@ -46,14 +46,14 @@ const signer = {
     // 4. Build the signed payload string (CANON-Spec §5).
     // Timestamp at minute precision: "2026-06-01T14:17Z"
     const timestamp = new Date().toISOString().slice(0, 16) + 'Z';
-    const payload = canon.buildPayload(fingerprint, keyHint, contentHash, timestamp);
+    const payload = canon.buildPayload(hash8, identity, contentHash, timestamp);
 
     // 5. Request signature from service worker (which opens PWA for biometric confirmation).
     let resp;
     try {
       resp = await chrome.runtime.sendMessage({
         type: 'SSD_SIGN_REQUEST',
-        payload: { fingerprint, signedPayload: payload, platform, previewText: canonicalText },
+        payload: { hash8, signedPayload: payload, platform, previewText: canonicalText },
       });
     } catch (err) {
       throw new Error(`Sign request failed: ${err.message || err}`);
@@ -64,17 +64,17 @@ const signer = {
     const fullSignature = resp.signature;
 
     // 6. Build token string.
-    const hash8 = contentHash.slice(0, 8);
+    const content8 = contentHash.slice(0, 8);
     let token;
     if (tokenType === 'short') {
-      token = tokenParser.buildShort(fingerprint, keyHint, hash8, tokenParser.sigHint(fullSignature), timestamp);
+      token = tokenParser.buildShort(hash8, identity, content8, tokenParser.sigHint(fullSignature), timestamp);
     } else {
-      token = tokenParser.buildFull(fingerprint, keyHint, hash8, fullSignature, timestamp);
+      token = tokenParser.buildFull(hash8, identity, content8, fullSignature, timestamp);
     }
 
     // 7. Vault submission — fire-and-forget; don't fail the sign if vault is down.
     if (vaultCfg.url) {
-      vault.submit(fingerprint, keyHint, contentHash, canonicalText, fullSignature, timestamp, platform)
+      vault.submit(hash8, identity, contentHash, canonicalText, fullSignature, timestamp, platform)
         .catch(() => {});
     }
 

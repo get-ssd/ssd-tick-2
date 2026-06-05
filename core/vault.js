@@ -11,10 +11,10 @@
 
 const vault = {
 
-  // Get vault config for a given key fingerprint.
+  // Get vault config for a given key hash8.
   // Returns { url, visibility, token } or { url:null, visibility:null, token:null }.
-  getConfig(fingerprint) {
-    const key = (typeof keyring !== 'undefined') ? keyring.get(fingerprint) : null;
+  getConfig(hash8) {
+    const key = (typeof keyring !== 'undefined') ? keyring.get(hash8) : null;
     const v = key && key.vault ? key.vault : null;
     if (!v || !v.url) return { url: null, visibility: null, token: null };
     return {
@@ -34,10 +34,10 @@ const vault = {
   //   GET {url}/vault/sig?fp=...&hint=...&ts=...
   //   → { full_signature: "..." }
   // Returns the full signature string, or null if unreachable / not found.
-  async fetchSig(fingerprint, sigHint, timestamp) {
-    const cfg = this.getConfig(fingerprint);
+  async fetchSig(hash8, sigHint, timestamp) {
+    const cfg = this.getConfig(hash8);
     if (!cfg.url) return null;
-    const q = new URLSearchParams({ fp: fingerprint, hint: sigHint, ts: timestamp });
+    const q = new URLSearchParams({ fp: hash8, hint: sigHint, ts: timestamp });
     try {
       const resp = await fetch(`${cfg.url}/vault/sig?${q}`, { headers: this._headers(cfg.token) });
       if (!resp.ok) return null;
@@ -50,12 +50,12 @@ const vault = {
 
   // Submit a signing event to the vault (CANON-Spec §12 "At signing time").
   // POST {url}/vault/submit. Returns true on success, false otherwise.
-  async submit(fingerprint, keyHint, contentHash, canonicalText, fullSignature, timestamp, platform) {
-    const cfg = this.getConfig(fingerprint);
+  async submit(hash8, identity, contentHash, canonicalText, fullSignature, timestamp, platform) {
+    const cfg = this.getConfig(hash8);
     if (!cfg.url) return false;
     const payload = {
-      fingerprint,
-      key_hint: keyHint,
+      hash8,
+      identity,
       content_hash: contentHash,
       canonical_text: canonicalText,
       full_signature: fullSignature,
@@ -74,14 +74,14 @@ const vault = {
     }
   },
 
-  // Discovery query: fetch canonical text by fingerprint + sig hint.
+  // Discovery query: fetch canonical text by hash8 + sig hint.
   //   GET {url}/vault/query?fp=...&sig=...
   //   → { canonical_text, timestamp, platform }
   // Returns the parsed object, or null on failure.
-  async query(fingerprint, sigHint) {
-    const cfg = this.getConfig(fingerprint);
+  async query(hash8, sigHint) {
+    const cfg = this.getConfig(hash8);
     if (!cfg.url) return null;
-    const q = new URLSearchParams({ fp: fingerprint, sig: sigHint });
+    const q = new URLSearchParams({ fp: hash8, sig: sigHint });
     try {
       const resp = await fetch(`${cfg.url}/vault/query?${q}`, { headers: this._headers(cfg.token) });
       if (!resp.ok) return null;

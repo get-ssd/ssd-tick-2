@@ -103,9 +103,9 @@ const canon = {
   },
 
   // Build the signed payload string (CANON-Spec §5):
-  //   {fingerprint}·{key-hint}·{content-hash}·{timestamp}
-  buildPayload(fingerprint, keyHint, contentHash, timestamp) {
-    return `${fingerprint}·${keyHint}·${contentHash}·${timestamp}`;
+  //   {hash8}·{identity}·{content-hash}·{timestamp}
+  buildPayload(hash8, identity, contentHash, timestamp) {
+    return `${hash8}·${identity}·${contentHash}·${timestamp}`;
   },
 };
 

@@ -1,17 +1,17 @@
 // background/service-worker.js
-// Key fetch, key-hint resolution, and an in-memory cache. The content script
+// Key fetch, identity resolution, and an in-memory cache. The content script
 // requests key resolution via chrome.runtime.sendMessage({ type: 'resolveKey', ... }).
 //
-// Key hint formats (CANON-Spec §7):
+// Identity hint formats (CANON-Spec §7):
 //   fb:{profile-id}   → fetch from Facebook profile      (implemented)
 //   url:{uri}         → fetch from explicit URI           (implemented)
 //   tw:{handle}       → Twitter/X profile                 (stub)
 //   li:{profile-id}   → LinkedIn profile                  (stub)
 //   bsky:{handle}     → Bluesky profile                   (stub)
-//   fp:{fingerprint}  → already in local keyring          (no fetch)
+//   fp:{hash8}        → already in local keyring          (no fetch)
 //
 // Resolved keys are cached in chrome.storage.local under "keystore"
-// { [fingerprint]: keyRecord }. Auto-fetched keys get source "profile" (from a
+// { [hash8]: keyRecord }. Auto-fetched keys get source "profile" (from a
 // social profile) or "url" (from a URL hint), with vouched_by null.
 
 const KEY_CARD_PATHS = [
@@ -47,7 +47,7 @@ async function fetchAndVerifyCard(url) {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const card = await resp.json();
 
-  const required = ['fingerprint', 'name', 'public_key', 'self_signed', 'signing_algorithm'];
+  const required = ['hash8', 'name', 'public_key', 'self_signed', 'signing_algorithm'];
   const missing = required.filter(f => !card[f]);
   if (missing.length) throw new Error(`Missing fields: ${missing.join(', ')}`);
   if (card.signing_algorithm !== 'Ed25519')
@@ -65,9 +65,9 @@ async function getKeystore() {
 async function storeFetchedKey(card, source) {
   const ks = await getKeystore();
   // Don't clobber an existing record (could be a user-trusted "direct" key).
-  if (ks[card.fingerprint]) return ks[card.fingerprint];
-  ks[card.fingerprint] = {
-    fingerprint:       card.fingerprint,
+  if (ks[card.hash8]) return ks[card.hash8];
+  ks[card.hash8] = {
+    hash8:             card.hash8,
     name:              card.name,
     public_key:        card.public_key,
     signing_algorithm: card.signing_algorithm,
@@ -83,10 +83,10 @@ async function storeFetchedKey(card, source) {
     token_default:     null,
   };
   await chrome.storage.local.set({ keystore: ks });
-  return ks[card.fingerprint];
+  return ks[card.hash8];
 }
 
-// ── key-hint resolution ──────────────────────────────────────────────────────
+// ── identity resolution ──────────────────────────────────────────────────────
 
 // Try a list of candidate URLs, returning the first card that verifies.
 async function tryCards(urls) {
@@ -104,12 +104,12 @@ async function resolveUrl(uri) {
   return tryCards([uri]);
 }
 
-// Resolve a key hint to a verified key card + source label, or null.
-async function resolveKeyHint(keyHint) {
-  const colon = keyHint.indexOf(':');
+// Resolve an identity hint to a verified key card + source label, or null.
+async function resolveIdentity(identity) {
+  const colon = identity.indexOf(':');
   if (colon === -1) return null;
-  const prefix = keyHint.slice(0, colon);
-  const rest = keyHint.slice(colon + 1);
+  const prefix = identity.slice(0, colon);
+  const rest = identity.slice(colon + 1);
 
   switch (prefix) {
     case 'fp':
@@ -157,16 +157,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       try {
         // Already local?
         const ks = await getKeystore();
-        if (ks[msg.fingerprint]) {
-          sendResponse({ ok: true, key: ks[msg.fingerprint] });
+        if (ks[msg.hash8]) {
+          sendResponse({ ok: true, key: ks[msg.hash8] });
           return;
         }
-        const resolved = await resolveKeyHint(msg.keyHint);
+        const resolved = await resolveIdentity(msg.identity);
         if (!resolved) { sendResponse({ ok: false, reason: 'unresolved' }); return; }
 
-        // Only accept a card whose fingerprint matches the token's claim.
-        if (resolved.card.fingerprint !== msg.fingerprint) {
-          sendResponse({ ok: false, reason: 'fingerprint-mismatch' });
+        // Only accept a card whose hash8 matches the token's claim.
+        if (resolved.card.hash8 !== msg.hash8) {
+          sendResponse({ ok: false, reason: 'hash8-mismatch' });
           return;
         }
         const stored = await storeFetchedKey(resolved.card, resolved.source);

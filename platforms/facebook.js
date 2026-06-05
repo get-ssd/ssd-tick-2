@@ -13,7 +13,7 @@
 platforms.register('fb', {
   profileUrl:      handle => `https://www.facebook.com/${encodeURIComponent(handle)}`,
   label:           'Visit their Facebook profile to import key',
-  nameFromHandle:  handle => handle,   // e.g. "alice.smith" — better than a fingerprint
+  nameFromHandle:  handle => handle,   // e.g. "alice.smith" — better than a hash8
 });
 
 const facebook = {
@@ -152,11 +152,11 @@ const facebook = {
     return '';
   }
 
-  // Handle a 3-field key declaration token: —SSD·{fingerprint}·{value}—
+  // Handle a 3-field key declaration token: —SSD·{hash8}·{value}—
   // value is either a 44-char base64 raw Ed25519 public key or an https:// URL.
   // Injects a trust badge near the declaration — key is only imported on click.
-  function handleKeyDeclaration(fingerprint, value, anchorNode) {
-    if (keyring.has(fingerprint)) return;
+  function handleKeyDeclaration(hash8, value, anchorNode) {
+    if (keyring.has(hash8)) return;
 
     const isUrl    = /^https?:\/\//.test(value);
     const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(value);
@@ -165,13 +165,13 @@ const facebook = {
     // Find a container to anchor the badge to.
     const parent = anchorNode.parentElement || anchorNode.parentNode;
     if (!parent) return;
-    if (parent.querySelector && parent.querySelector('.ssd-trust-btn[data-fp="' + fingerprint + '"]')) return;
+    if (parent.querySelector && parent.querySelector('.ssd-trust-btn[data-hash8="' + hash8 + '"]')) return;
 
     const btn = document.createElement('button');
     btn.className = 'ssd-trust-btn ssd-indicator';
-    btn.dataset.fp = fingerprint;
+    btn.dataset.hash8 = hash8;
     btn.dataset.ssdState = 'KEY_DECLARATION';
-    btn.setAttribute('title', `SSD key declaration — click to trust this signer (${fingerprint})`);
+    btn.setAttribute('title', `SSD key declaration — click to trust this signer (${hash8})`);
     btn.textContent = '🔑 Trust key';
 
     btn.addEventListener('click', async (e) => {
@@ -180,22 +180,22 @@ const facebook = {
       btn.textContent = 'Importing…';
       try {
         if (isUrl) {
-          await chrome.runtime.sendMessage({ type: 'resolveKey', fingerprint, keyHint: `url:${value}` });
+          await chrome.runtime.sendMessage({ type: 'resolveKey', hash8, identity: `url:${value}` });
           await keyring.load();
         } else {
-          // Key hint from URL: facebook.com/{handle} → fb:{handle}.
-          // profile.php URLs have no clean handle so key_hint stays null.
+          // Identity hint from URL: facebook.com/{handle} → fb:{handle}.
+          // profile.php URLs have no clean handle so identity stays null.
           const pathParts  = location.pathname.split('/').filter(Boolean);
           const urlHandle  = pathParts.length === 1 && pathParts[0] !== 'profile.php'
             ? pathParts[0] : null;
-          const key_hint   = urlHandle ? `fb:${urlHandle}` : null;
+          const identity   = urlHandle ? `fb:${urlHandle}` : null;
           // Name: page title is most reliable; h1 covers "Facebook" generic titles.
           const titleParts = document.title.split('|');
           const titleName  = titleParts.length >= 2 ? titleParts[0].trim() : '';
           const h1Name     = document.querySelector('h1')?.innerText?.trim() || '';
-          const name       = titleName || h1Name || fingerprint;
+          const name       = titleName || h1Name || hash8;
           await keyring.put({
-            fingerprint, name, key_hint, public_key: value,
+            hash8, name, identity, public_key: value,
             signing_algorithm: 'Ed25519',
             issued: null, expires: null, self_signed: null,
             imported_at: new Date().toISOString(),
@@ -233,15 +233,15 @@ const facebook = {
           const rawPostText = parsedToken ? readPostText(textNode, parsedToken.raw) : '';
           jobs.push({ textNode, parsedToken, commit, rawPostText });
         },
-        (fingerprint, value, textNode) => handleKeyDeclaration(fingerprint, value, textNode)
+        (hash8, value, textNode) => handleKeyDeclaration(hash8, value, textNode)
       );
       console.debug('[SSD:fb] scan complete, jobs:', jobs.length);
       for (const { textNode, parsedToken, commit, rawPostText } of jobs) {
         // Inject SCANNING badge immediately — even for unrecognised token formats.
         const scanningEl = badge.create({
           state: 'SCANNING',
-          fingerprint: parsedToken ? parsedToken.fingerprint : null,
-          keyHint: parsedToken ? parsedToken.keyHint : null,
+          hash8:    parsedToken ? parsedToken.hash8     : null,
+          identity: parsedToken ? parsedToken.identity  : null,
           signerName: null, trustLevel: null,
           timestamp: parsedToken ? parsedToken.timestamp : null,
           isShort: parsedToken ? parsedToken.isShort : false,
@@ -263,12 +263,12 @@ const facebook = {
         } catch (err) {
           console.error('[SSD] verify failed', err);
           result = {
-            state: 'INVALID', fingerprint: parsedToken.fingerprint,
-            keyHint: parsedToken.keyHint, signerName: null, trustLevel: null,
+            state: 'INVALID', hash8: parsedToken.hash8,
+            identity: parsedToken.identity, signerName: null, trustLevel: null,
             timestamp: parsedToken.timestamp, isShort: false, vaultUsed: false,
           };
         }
-        console.debug('[SSD:fb] verify result:', result.state, 'fp:', result.fingerprint);
+        console.debug('[SSD:fb] verify result:', result.state, 'hash8:', result.hash8);
         result._rawPostText = rawPostText;
         badge.update(badgeEl, result);
         commit();
