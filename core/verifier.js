@@ -42,7 +42,7 @@ const verifier = {
   },
 
   // Main verification entry point.
-  //   tokenString — the raw —SSD·…— token text
+  //   tokenString — the raw [SSD:…] token text
   //   rawPostText — the full text of the post (including the token); canon
   //                 splits off the token itself.
   async verify(tokenString, rawPostText) {
@@ -62,7 +62,7 @@ const verifier = {
     };
 
     // TRUNCATED check: pre-token content too short to hash reliably.
-    const tokenIdx = rawPostText.lastIndexOf('—SSD·');
+    const tokenIdx = rawPostText.lastIndexOf('[SSD:');
     const preToken = (tokenIdx !== -1 ? rawPostText.slice(0, tokenIdx) : rawPostText).trim();
     console.debug('[SSD:verify] preToken length:', preToken.length, 'threshold:', this.TRUNCATION_THRESHOLD);
     if (preToken.length < this.TRUNCATION_THRESHOLD) {

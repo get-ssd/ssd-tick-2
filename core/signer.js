@@ -11,7 +11,7 @@
 const signer = {
 
   // Full signing pipeline.
-  //   rawText  — post body text (without any existing —SSD·…— token)
+  //   rawText  — post body text (without any existing [SSD:…] token)
   //   hash8    — key identifier: which key to sign with
   //   platform — 'facebook', 'twitter', etc. (recorded in vault; no effect on sig)
   //

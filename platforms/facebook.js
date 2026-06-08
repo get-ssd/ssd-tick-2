@@ -152,14 +152,14 @@ const facebook = {
     return '';
   }
 
-  // Handle a 3-field key declaration token: —SSD·{hash8}·{value}—
+  // Handle a 2-field key declaration token: [SSD:{hash8}:{value}]
   // value is either a 44-char base64 raw Ed25519 public key or an https:// URL.
   // Injects a trust badge near the declaration — key is only imported on click.
   function handleKeyDeclaration(hash8, value, anchorNode) {
     if (keyring.has(hash8)) return;
 
     const isUrl    = /^https?:\/\//.test(value);
-    const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(value);
+    const isBase64 = /^[A-Za-z0-9_-]{43}$/.test(value);
     if (!isUrl && !isBase64) return;
 
     // Find a container to anchor the badge to.

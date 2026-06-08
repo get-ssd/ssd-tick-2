@@ -125,7 +125,7 @@ const reddit = {
     if (keyring.has(hash8)) return;
 
     const isUrl    = /^https?:\/\//.test(value);
-    const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(value);
+    const isBase64 = /^[A-Za-z0-9_-]{43}$/.test(value);
     if (!isUrl && !isBase64) return;
 
     const parent = anchorNode.parentElement || anchorNode.parentNode;

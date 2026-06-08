@@ -2,12 +2,12 @@
 // Twitter/X platform module. PoC — lives on feature/twitter-poc for review
 // before merge. See docs/PROMPT-Twitter-Plugin-v0_1.md (v0.2).
 //
-// Sig delivery differs from all other platforms: the —SSD· token is posted as
+// Sig delivery differs from all other platforms: the [SSD:...] token is posted as
 // an immediate self-reply, NOT inline in the tweet body. The tweet body is the
 // signed content; the reply carries the machine-readable token. Both encode the
 // same data — the card image QR is the human-readable path (future scope).
 //
-// Scan architecture: textScanner still finds all —SSD· text nodes. After each
+// Scan architecture: textScanner still finds all [SSD: text nodes. After each
 // text node is located, we check whether it sits inside a self-reply article
 // (reply-path) or inside the tweet body (inline-path, backwards compat).
 //
@@ -212,7 +212,7 @@ const twitter = {
     if (keyring.has(hash8)) return;
 
     const isUrl    = /^https?:\/\//.test(value);
-    const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(value);
+    const isBase64 = /^[A-Za-z0-9_-]{43}$/.test(value);
     if (!isUrl && !isBase64) return;
 
     const parent = anchorNode.parentElement || anchorNode.parentNode;
@@ -292,7 +292,7 @@ const twitter = {
               // Reply-path: signed content is the parent tweet's body text.
               // The token string itself is NOT part of the signed content;
               // verifier.verify / canon handle rawPostText-without-token fine
-              // (CANON-1 finds no —SSD· in the body and uses all of it).
+              // (CANON-1 finds no [SSD: in the body and uses all of it).
               const bodyText = extractTweetBody(parentTweet);
               console.debug('[SSD:tw] reply-path, body preview:',
                 bodyText.slice(0, 60).replace(/\n/g, '↵'));

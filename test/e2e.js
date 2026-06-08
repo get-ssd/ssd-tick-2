@@ -145,7 +145,7 @@ async function run() {
       return out ? out.textContent.trim() : null;
     });
 
-    if (!signedText || !signedText.includes('—SSD·')) {
+    if (!signedText || !signedText.includes('[SSD:')) {
       console.log('      PWA sign not captured — falling back to signed-post.txt');
       const fallback = fs.readFileSync(path.resolve(EXT_DIR, '..', 'signed-post.txt'), 'utf8');
       await testVerification(browser, fallback.trim());
@@ -209,7 +209,7 @@ async function testVerification(browser, signedText) {
       text:        el?.textContent?.trim() ?? null,
       state:       el?.dataset?.ssdState ?? null,
       styleSheets: document.styleSheets.length,
-      tokenInPage: document.body.textContent.includes('—SSD·'),
+      tokenInPage: document.body.textContent.includes('[SSD:'),
     };
   });
 
@@ -233,7 +233,7 @@ async function testVerification(browser, signedText) {
         text:        el?.textContent?.trim() ?? null,
         state:       el?.dataset?.ssdState ?? null,
         styleSheets: document.styleSheets.length,
-        tokenInPage: document.body.textContent.includes('—SSD·'),
+        tokenInPage: document.body.textContent.includes('[SSD:'),
       };
     }));
   }

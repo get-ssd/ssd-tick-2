@@ -58,7 +58,7 @@ const signButton = {
 
     // 2. Read raw compose text, strip any existing token.
     const rawWithToken = this._readCompose(composeElement);
-    const rawText = rawWithToken.replace(/\s*—SSD·[^—]+—\s*$/, '').trim();
+    const rawText = rawWithToken.replace(/\s*\[SSD:[^\]]+\]\s*$/, '').trim();
 
     // 3. Sign.
     this._setState(btn, 'signing');
@@ -155,13 +155,13 @@ const signButton = {
     }
   },
 
-  // Remove the trailing —SSD·…— token from the compose element.
+  // Remove the trailing [SSD:…] token from the compose element.
   _removeToken(el) {
     if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-      el.value = el.value.replace(/\s*—SSD·[^—]+—\s*$/, '');
+      el.value = el.value.replace(/\s*\[SSD:[^\]]+\]\s*$/, '');
       el.dispatchEvent(new Event('input', { bubbles: true }));
     } else {
-      const text = (el.innerText || el.textContent || '').replace(/\s*—SSD·[^—]+—\s*$/, '');
+      const text = (el.innerText || el.textContent || '').replace(/\s*\[SSD:[^\]]+\]\s*$/, '');
       // Replace innerText via execCommand to keep React in sync.
       el.focus();
       document.execCommand('selectAll', false, null);

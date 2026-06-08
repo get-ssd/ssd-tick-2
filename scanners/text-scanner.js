@@ -1,15 +1,15 @@
 // scanners/text-scanner.js
-// Scans the page for —SSD· tokens in text content.
+// Scans the page for [SSD:...] tokens in text content.
 // Each token text node is its own context — one badge per token.
 
 const textScanner = {
 
   scan(callback, onKeyDeclaration) {
-    if (document.body.textContent.indexOf('—SSD·') === -1) {
-      console.debug('[SSD:scan] no —SSD· found in page text');
+    if (document.body.textContent.indexOf('[SSD:') === -1) {
+      console.debug('[SSD:scan] no [SSD: found in page text');
       return;
     }
-    console.debug('[SSD:scan] —SSD· found in page, walking text nodes');
+    console.debug('[SSD:scan] [SSD: found in page, walking text nodes');
 
     const walker = document.createTreeWalker(
       document.body,
@@ -24,7 +24,7 @@ const textScanner = {
               return NodeFilter.FILTER_REJECT;
             }
           }
-          return node.textContent.indexOf('—SSD·') !== -1
+          return node.textContent.indexOf('[SSD:') !== -1
             ? NodeFilter.FILTER_ACCEPT
             : NodeFilter.FILTER_SKIP;
         },
@@ -49,10 +49,14 @@ const textScanner = {
         if (parsed) {
           matches.push({ raw: match[0], parsed });
         } else {
+          // 2-field key declaration: [SSD:{hash8}:{value}]
+          // Split at first colon only — value may be a URL containing colons.
           const inner = match[0].slice(5, -1);
-          const parts = inner.split('·');
-          if (parts.length === 2 && parts[0] && parts[1]) {
-            if (onKeyDeclaration) onKeyDeclaration(parts[0], parts[1], node);
+          const colonIdx = inner.indexOf(':');
+          if (colonIdx > 0) {
+            const h8 = inner.slice(0, colonIdx);
+            const val = inner.slice(colonIdx + 1);
+            if (h8 && val && onKeyDeclaration) onKeyDeclaration(h8, val, node);
           } else {
             matches.push({ raw: match[0], parsed: null });
           }

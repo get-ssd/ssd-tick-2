@@ -57,13 +57,12 @@ const canon = {
   async canonicalise(rawText) {
     let text = typeof rawText === 'string' ? rawText : String(rawText ?? '');
 
-    // CANON-1: split at the LAST occurrence of "—SSD·", take everything before.
-    //   NOTE: CANON-Spec §3 says "first occurrence" but that is wrong for quoted
-    //   posts. A post quoting another signed post has two —SSD· occurrences; the
+    // CANON-1: split at the LAST occurrence of "[SSD:", take everything before.
+    //   A post quoting another signed post has two [SSD: occurrences; the
     //   author's own token is always appended last. Splitting at the LAST gives
     //   the correct signed content. If no token is present the whole text is
     //   signed content.
-    const lastTokenIdx = text.lastIndexOf('—SSD·');
+    const lastTokenIdx = text.lastIndexOf('[SSD:');
     if (lastTokenIdx !== -1) {
       text = text.slice(0, lastTokenIdx);
     }
@@ -102,10 +101,10 @@ const canon = {
     return { canonicalText: text, contentHash };
   },
 
-  // Build the signed payload string (CANON-Spec §5):
-  //   {hash8}·{identity}·{content-hash}·{timestamp}
+  // Build the signed payload string (PROTO-Spec v0.4 §5):
+  //   {hash8}:{identity}:{content-hash}:{timestamp}
   buildPayload(hash8, identity, contentHash, timestamp) {
-    return `${hash8}·${identity}·${contentHash}·${timestamp}`;
+    return `${hash8}:${identity}:${contentHash}:${timestamp}`;
   },
 };
 
