@@ -18,6 +18,12 @@ const tokenParser = {
   // Returns null if string is not a recognisable SSD content-sig token.
   // Accepts 5-field (hash8:identity:content8:sig:ts) and 4-field legacy
   // (hash8:identity:sig:ts — no content8 hint).
+  //
+  // Parsing strategy: anchor from the ends. Timestamp always has exactly one
+  // internal colon (HH:MM), so the last two split-parts are always ts_start
+  // and ts_end. Sig is base64url (no colons). content8 is 8 lowercase hex
+  // chars. identity may contain colons (e.g. fb:j.smith). We try full format
+  // first (checking parts[-4] against [0-9a-f]{8}), then legacy.
   parse(tokenString) {
     if (typeof tokenString !== 'string') return null;
 
@@ -26,10 +32,20 @@ const tokenParser = {
 
     const inner = trimmed.slice(5, -1);
     const parts = inner.split(':');
+    const n = parts.length;
 
-    if (parts.length === 5) {
-      const [hash8, identity, content8, sigOrHint, timestamp] = parts;
-      if (!hash8 || !identity || !content8 || !sigOrHint || !timestamp) return null;
+    // Need at least: hash8 + identity + sig + ts_start + ts_end = 5 parts
+    if (n < 5) return null;
+
+    const hash8     = parts[0];
+    const timestamp = parts[n - 2] + ':' + parts[n - 1];
+
+    // Try full format: parts[n-4] must be 8 lowercase hex chars (content8)
+    if (n >= 6 && /^[0-9a-f]{8}$/.test(parts[n - 4])) {
+      const content8  = parts[n - 4];
+      const sigOrHint = parts[n - 3];
+      const identity  = parts.slice(1, n - 4).join(':');
+      if (!hash8 || !identity || !sigOrHint) return null;
       const isShort = sigOrHint.startsWith('#');
       return {
         hash8, identity, content8, isShort,
@@ -40,9 +56,10 @@ const tokenParser = {
     }
 
     // Legacy 4-field token — no content8 hint, signing payload is identical.
-    if (parts.length === 4) {
-      const [hash8, identity, sigOrHint, timestamp] = parts;
-      if (!hash8 || !identity || !sigOrHint || !timestamp) return null;
+    {
+      const sigOrHint = parts[n - 3];
+      const identity  = parts.slice(1, n - 3).join(':');
+      if (!hash8 || !identity || !sigOrHint) return null;
       const isShort = sigOrHint.startsWith('#');
       return {
         hash8, identity, content8: null, isShort,
@@ -51,8 +68,6 @@ const tokenParser = {
         timestamp, raw: trimmed,
       };
     }
-
-    return null;
   },
 
   buildFull(hash8, identity, content8, signature, timestamp) {
