@@ -208,64 +208,19 @@ const twitter = {
     return '';
   }
 
-  function handleKeyDeclaration(hash8, value, anchorNode) {
-    if (keyring.has(hash8)) return;
-
-    const isUrl    = /^https?:\/\//.test(value);
-    const isBase64 = /^[A-Za-z0-9_-]{43}$/.test(value);
-    if (!isUrl && !isBase64) return;
-
-    const parent = anchorNode.parentElement || anchorNode.parentNode;
-    if (!parent) return;
-    if (parent.querySelector && parent.querySelector('.ssd-trust-btn[data-hash8="' + hash8 + '"]')) return;
-
-    const btn = document.createElement('button');
-    btn.className = 'ssd-trust-btn ssd-indicator';
-    btn.dataset.hash8 = hash8;
-    btn.dataset.ssdState = 'KEY_DECLARATION';
-    btn.setAttribute('title', `SSD key declaration — click to trust this signer (${hash8})`);
-    btn.textContent = '🔑 Trust key';
-
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      btn.disabled = true;
-      btn.textContent = 'Importing…';
-      try {
-        if (isUrl) {
-          await chrome.runtime.sendMessage({ type: 'resolveKey', hash8, identity: `url:${value}` });
-          await keyring.load();
-        } else {
-          // Identity hint: derive tw:handle from the current profile URL if on one.
-          const pathMatch  = location.pathname.match(/^\/(@?[-\w]+)/);
-          const urlHandle  = pathMatch ? pathMatch[1].replace(/^@/, '') : null;
-          const identity   = urlHandle ? `tw:${urlHandle}` : null;
-          // Name: Twitter page titles look like "Name (@handle) / Twitter" or
-          //       "Name (@handle) / X" — extract @handle from parens.
-          const titleMatch = document.title.match(/\(@([-\w]+)\)/);
-          const name       = titleMatch ? `@${titleMatch[1]}`
-                           : (urlHandle ? `@${urlHandle}` : hash8);
-          await keyring.put({
-            hash8, name, identity, public_key: value,
-            signing_algorithm: 'Ed25519',
-            issued: null, expires: null, self_signed: null,
-            imported_at: new Date().toISOString(),
-            source: 'profile',
-            vouched_by: null, bundle_name: null, credibility: null, vault: null, token_default: null,
-          });
-        }
-        btn.textContent = '✓ Key trusted';
-        btn.dataset.ssdState = 'VALID';
-        onNewContent();
-      } catch (err) {
-        btn.textContent = '✗ Failed';
-        btn.disabled = false;
-        console.error('[SSD] key import failed', err);
-      }
-    });
-
-    parent.style.position = 'relative';
-    parent.appendChild(btn);
-  }
+  // [SSDKEY:] beacon handler — three import states per SPEC-PROTO §5.7.
+  const handleKeyBeacon = textScanner.makeBeaconHandler(
+    (hash8) => {
+      const pathMatch = location.pathname.match(/^\/(@?[-\w]+)/);
+      const urlHandle = pathMatch ? pathMatch[1].replace(/^@/, '') : null;
+      const identity  = urlHandle ? `tw:${urlHandle}` : null;
+      const titleMatch = document.title.match(/\(@([-\w]+)\)/);
+      const name = titleMatch ? `@${titleMatch[1]}`
+                 : (urlHandle ? `@${urlHandle}` : hash8);
+      return { name, identity };
+    },
+    () => onNewContent()
+  );
 
   let scanning = false;
   async function onNewContent() {
@@ -306,7 +261,7 @@ const twitter = {
           const rawPostText = readPostText(textNode, parsedToken.raw);
           jobs.push({ type: 'inline', textNode, parsedToken, commit, rawPostText });
         },
-        (hash8, value, textNode) => handleKeyDeclaration(hash8, value, textNode)
+        handleKeyBeacon
       );
 
       console.debug('[SSD:tw] scan complete, jobs:', jobs.length);

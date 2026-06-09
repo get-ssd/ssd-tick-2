@@ -121,66 +121,22 @@ const reddit = {
     return '';
   }
 
-  function handleKeyDeclaration(hash8, value, anchorNode) {
-    if (keyring.has(hash8)) return;
-
-    const isUrl    = /^https?:\/\//.test(value);
-    const isBase64 = /^[A-Za-z0-9_-]{43}$/.test(value);
-    if (!isUrl && !isBase64) return;
-
-    const parent = anchorNode.parentElement || anchorNode.parentNode;
-    if (!parent) return;
-    if (parent.querySelector && parent.querySelector('.ssd-trust-btn[data-hash8="' + hash8 + '"]')) return;
-
-    const btn = document.createElement('button');
-    btn.className = 'ssd-trust-btn ssd-indicator';
-    btn.dataset.hash8 = hash8;
-    btn.dataset.ssdState = 'KEY_DECLARATION';
-    btn.setAttribute('title', `SSD key declaration — click to trust this signer (${hash8})`);
-    btn.textContent = '🔑 Trust key';
-
-    btn.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      btn.disabled = true;
-      btn.textContent = 'Importing…';
-      try {
-        if (isUrl) {
-          await chrome.runtime.sendMessage({ type: 'resolveKey', hash8, identity: `url:${value}` });
-          await keyring.load();
-        } else {
-          // Identity hint from URL: reddit.com/user/{handle} or /u/{handle} → rd:{handle}.
-          const pathMatch  = location.pathname.match(/^\/(?:user|u)\/([-\w]+)/i);
-          const urlHandle  = pathMatch ? pathMatch[1] : null;
-          const identity   = urlHandle ? `rd:${urlHandle}` : null;
-          // Name from page title: "u/username - Reddit" (new) or "overview for username" (old).
-          const title       = document.title;
-          const uSlash      = title.match(/\bu\/([-\w]+)/i);
-          const overviewFor = title.match(/overview\s+for\s+([-\w]+)/i);
-          const titleName   = uSlash ? `u/${uSlash[1]}` : overviewFor ? `u/${overviewFor[1]}` : '';
-          const h1Name      = document.querySelector('h1')?.innerText?.trim() || '';
-          const name        = titleName || h1Name || hash8;
-          await keyring.put({
-            hash8, name, identity, public_key: value,
-            signing_algorithm: 'Ed25519',
-            issued: null, expires: null, self_signed: null,
-            imported_at: new Date().toISOString(),
-            source: 'profile',
-            vouched_by: null, bundle_name: null, credibility: null, vault: null, token_default: null,
-          });
-        }
-        btn.textContent = '✓ Key trusted';
-        btn.dataset.ssdState = 'VALID';
-        onNewContent();
-      } catch (err) {
-        btn.textContent = '✗ Failed';
-        btn.disabled = false;
-        console.error('[SSD] key import failed', err);
-      }
-    });
-
-    parent.style.position = 'relative';
-    parent.appendChild(btn);
-  }
+  // [SSDKEY:] beacon handler — three import states per SPEC-PROTO §5.7.
+  const handleKeyBeacon = textScanner.makeBeaconHandler(
+    (hash8) => {
+      const pathMatch   = location.pathname.match(/^\/(?:user|u)\/([-\w]+)/i);
+      const urlHandle   = pathMatch ? pathMatch[1] : null;
+      const identity    = urlHandle ? `rd:${urlHandle}` : null;
+      const title       = document.title;
+      const uSlash      = title.match(/\bu\/([-\w]+)/i);
+      const overviewFor = title.match(/overview\s+for\s+([-\w]+)/i);
+      const titleName   = uSlash ? `u/${uSlash[1]}` : overviewFor ? `u/${overviewFor[1]}` : '';
+      const h1Name      = document.querySelector('h1')?.innerText?.trim() || '';
+      const name = titleName || h1Name || hash8;
+      return { name, identity };
+    },
+    () => onNewContent()
+  );
 
   let scanning = false;
   async function onNewContent() {
@@ -193,7 +149,7 @@ const reddit = {
           const rawPostText = parsedToken ? readPostText(textNode, parsedToken.raw) : '';
           jobs.push({ textNode, parsedToken, commit, rawPostText });
         },
-        (hash8, value, textNode) => handleKeyDeclaration(hash8, value, textNode)
+        handleKeyBeacon
       );
       console.debug('[SSD:reddit] scan complete, jobs:', jobs.length);
       for (const { textNode, parsedToken, commit, rawPostText } of jobs) {

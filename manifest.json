@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://www.facebook.com/*",

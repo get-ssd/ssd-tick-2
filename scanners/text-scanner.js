@@ -1,15 +1,43 @@
 // scanners/text-scanner.js
-// Scans the page for [SSD:...] tokens in text content.
-// Each token text node is its own context — one badge per token.
+// Scans the page for [SSD:...] content tokens and [SSDKEY:...] key beacons.
+// Each content-token text node is its own context — one badge per context.
+
+// Parse a [SSDKEY:...] beacon string. Returns { hash8, pubkey } or null.
+// Format: [SSDKEY:{8-char-uppercase-hex}:{43-char-base64url-no-pad}]
+// SHA-256 self-consistency (hash8 == first 8 hex chars of SHA-256(pubkey_bytes))
+// is NOT checked here — it requires async crypto and is done by the handler.
+function parseKeyBeacon(raw) {
+  if (!raw.startsWith('[SSDKEY:') || !raw.endsWith(']')) return null;
+  const inner = raw.slice(8, -1);
+  const colon = inner.indexOf(':');
+  if (colon < 0) return null;
+  const hash8  = inner.slice(0, colon);
+  const pubkey = inner.slice(colon + 1);
+  if (!/^[0-9A-F]{8}$/.test(hash8)) return null;
+  if (!/^[A-Za-z0-9_-]{43}$/.test(pubkey)) return null;
+  return { hash8, pubkey };
+}
+
+const SSDKEY_PATTERN = /\[SSDKEY:[^\]]+\]/g;
 
 const textScanner = {
 
-  scan(callback, onKeyDeclaration) {
-    if (document.body.textContent.indexOf('[SSD:') === -1) {
-      console.debug('[SSD:scan] no [SSD: found in page text');
+  // Walk the page DOM for [SSD:] content tokens and [SSDKEY:] key beacons.
+  //
+  // callback(textNode, parsedToken | null, commit) — called once per context
+  //   element; parsedToken is null for unrecognised [SSD:] matches.
+  //
+  // onKeyBeacon(hash8, pubkey, textNode) — called immediately for each valid
+  //   [SSDKEY:] beacon; platform handler does its own dedup by DOM inspection.
+  scan(callback, onKeyBeacon) {
+    const bodyText  = document.body.textContent;
+    const hasSSD    = bodyText.indexOf('[SSD:') !== -1;
+    const hasSSDKEY = bodyText.indexOf('[SSDKEY:') !== -1;
+    if (!hasSSD && !hasSSDKEY) {
+      console.debug('[SSD:scan] no tokens found in page text');
       return;
     }
-    console.debug('[SSD:scan] [SSD: found in page, walking text nodes');
+    console.debug('[SSD:scan] tokens found in page, walking text nodes');
 
     const walker = document.createTreeWalker(
       document.body,
@@ -24,52 +52,53 @@ const textScanner = {
               return NodeFilter.FILTER_REJECT;
             }
           }
-          return node.textContent.indexOf('[SSD:') !== -1
+          const t = node.textContent;
+          return (t.indexOf('[SSD:') !== -1 || t.indexOf('[SSDKEY:') !== -1)
             ? NodeFilter.FILTER_ACCEPT
             : NodeFilter.FILTER_SKIP;
         },
       }
     );
 
-    // Each token text node is its own context (keyed by parent element).
-    // Map<parentElement, Array<{ node, parsed, raw }>>
+    // Content tokens: grouped by parent context element — one badge per context.
     const byContext = new Map();
 
     let node;
     while ((node = walker.nextNode())) {
       const text = node.textContent;
-      const pattern = tokenParser.PATTERN;
-      pattern.lastIndex = 0;
-      let match;
-      const matches = [];
-      while ((match = pattern.exec(text)) !== null) {
-        console.debug('[SSD:scan] PATTERN matched raw:', match[0]);
-        const parsed = tokenParser.parse(match[0]);
-        console.debug('[SSD:scan] tokenParser.parse result:', parsed);
-        if (parsed) {
-          matches.push({ raw: match[0], parsed });
-        } else {
-          // 2-field key declaration: [SSD:{hash8}:{value}]
-          // Split at first colon only — value may be a URL containing colons.
-          const inner = match[0].slice(5, -1);
-          const colonIdx = inner.indexOf(':');
-          if (colonIdx > 0) {
-            const h8 = inner.slice(0, colonIdx);
-            const val = inner.slice(colonIdx + 1);
-            if (h8 && val && onKeyDeclaration) onKeyDeclaration(h8, val, node);
-          } else {
-            matches.push({ raw: match[0], parsed: null });
-          }
+
+      // [SSDKEY:] beacons — parse and fire immediately; no context-grouping.
+      if (onKeyBeacon && text.indexOf('[SSDKEY:') !== -1) {
+        SSDKEY_PATTERN.lastIndex = 0;
+        let m;
+        while ((m = SSDKEY_PATTERN.exec(text)) !== null) {
+          console.debug('[SSD:scan] SSDKEY matched:', m[0].slice(0, 60));
+          const parsed = parseKeyBeacon(m[0]);
+          if (parsed) onKeyBeacon(parsed.hash8, parsed.pubkey, node);
         }
       }
-      if (!matches.length) continue;
 
-      const context = node.parentElement || document.body;
-      console.debug('[SSD:scan] text node context:', context.nodeName, 'matches:', matches.length);
-      if (!byContext.has(context)) byContext.set(context, []);
-      const bucket = byContext.get(context);
-      for (const m of matches) {
-        bucket.push({ node, parsed: m.parsed, raw: m.raw });
+      // [SSD:] content tokens — group by context element.
+      if (text.indexOf('[SSD:') !== -1) {
+        const pattern = tokenParser.PATTERN;
+        pattern.lastIndex = 0;
+        let match;
+        const matches = [];
+        while ((match = pattern.exec(text)) !== null) {
+          console.debug('[SSD:scan] PATTERN matched raw:', match[0]);
+          const parsed = tokenParser.parse(match[0]);
+          console.debug('[SSD:scan] tokenParser.parse result:', parsed);
+          matches.push({ raw: match[0], parsed: parsed || null });
+        }
+        if (!matches.length) continue;
+
+        const context = node.parentElement || document.body;
+        console.debug('[SSD:scan] text node context:', context.nodeName, 'matches:', matches.length);
+        if (!byContext.has(context)) byContext.set(context, []);
+        const bucket = byContext.get(context);
+        for (const m of matches) {
+          bucket.push({ node, parsed: m.parsed, raw: m.raw });
+        }
       }
     }
 
@@ -99,6 +128,152 @@ const textScanner = {
     let set = this._processed.get(node);
     if (!set) { set = new Set(); this._processed.set(node, set); }
     set.add(raw);
+  },
+
+  // Factory: returns a handleKeyBeacon(hash8, pubkey, anchorNode) function for
+  // a specific platform bootstrap.
+  //
+  // nameResolver(hash8) → { name, identity }
+  //   Called at import time; reads current page context. hash8 is passed as a
+  //   fallback for the name field when no page-derived name is available.
+  //
+  // onImported()
+  //   Called after a successful key import to trigger a re-scan.
+  makeBeaconHandler(nameResolver, onImported) {
+
+    function b64ToBytes(b64) {
+      let s = b64.replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4) s += '=';
+      return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+    }
+
+    async function verifySelfConsistency(hash8, pubkey) {
+      const bytes = b64ToBytes(pubkey);
+      const buf   = await crypto.subtle.digest('SHA-256', bytes);
+      const hex   = Array.from(new Uint8Array(buf))
+        .map(b => b.toString(16).padStart(2, '0')).join('');
+      return hex.slice(0, 8).toUpperCase() === hash8;
+    }
+
+    async function storeBeaconKey(hash8, pubkey) {
+      const { name, identity } = nameResolver(hash8);
+      await keyring.put({
+        hash8, name, identity, public_key: pubkey,
+        signing_algorithm: 'Ed25519',
+        issued: null, expires: null, self_signed: null,
+        imported_at: new Date().toISOString(),
+        source:      'profile',
+        vouched_by: null, bundle_name: null, credibility: null, vault: null, token_default: null,
+      });
+    }
+
+    return function handleKeyBeacon(hash8, pubkey, anchorNode) {
+      const parent = anchorNode.parentElement || anchorNode.parentNode;
+      if (!parent) return;
+      if (parent.querySelector &&
+          parent.querySelector('.ssd-key-beacon[data-hash8="' + hash8 + '"]')) return;
+
+      const existing = keyring.get(hash8);
+      const isSame   = existing && existing.public_key === pubkey;
+      const isDiff   = existing && existing.public_key !== pubkey;
+
+      const btn = document.createElement('button');
+      btn.className     = 'ssd-key-beacon ssd-indicator';
+      btn.dataset.hash8 = hash8;
+
+      // Known, same key — informational only; no action needed.
+      if (isSame) {
+        btn.dataset.ssdState = 'KEY_BEACON_KNOWN';
+        btn.textContent = `🔑 Key known (${hash8})`;
+        btn.disabled    = true;
+        btn.title       = `SSD key ${hash8} is already in your keyring`;
+        parent.style.position = 'relative';
+        parent.appendChild(btn);
+        return;
+      }
+
+      if (isDiff) {
+        btn.dataset.ssdState = 'KEY_BEACON_DIFFERENT';
+        btn.textContent = `🔑 Key differs (${hash8})`;
+        btn.title       = `SSD — you know ${hash8} under a different key. Click to review.`;
+      } else {
+        btn.dataset.ssdState = 'KEY_BEACON_NEW';
+        btn.textContent = `🔑 Add key (${hash8})`;
+        btn.title       = `SSD key beacon — click to add signer ${hash8} to your keyring`;
+      }
+
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        btn.disabled    = true;
+        btn.textContent = 'Verifying…';
+
+        // Step 5 of §5.7 parse algorithm: verify hash8 == SHA-256(pubkey_bytes)[0..8].
+        let ok;
+        try {
+          ok = await verifySelfConsistency(hash8, pubkey);
+        } catch (err) {
+          btn.textContent = '✗ Error';
+          btn.disabled    = false;
+          console.error('[SSD] beacon crypto error', err);
+          return;
+        }
+        if (!ok) {
+          btn.textContent      = '✗ Invalid beacon';
+          btn.dataset.ssdState = 'KEY_BEACON_INVALID';
+          console.warn('[SSD] SSDKEY rejected — hash8/pubkey mismatch:', hash8);
+          return;
+        }
+
+        // Replace button with inline confirmation panel.
+        const confirmEl = document.createElement('span');
+        confirmEl.className = 'ssd-beacon-confirm';
+        if (isDiff) {
+          confirmEl.innerHTML =
+            `<span class="ssd-beacon-msg">Key differs — replace existing <span class="ssd-mono">${hash8}</span>?</span>` +
+            `<button class="ssd-beacon-yes">Replace</button>` +
+            `<button class="ssd-beacon-no">Keep</button>`;
+        } else {
+          confirmEl.innerHTML =
+            `<span class="ssd-beacon-msg">Add key <span class="ssd-mono">${hash8}</span>?</span>` +
+            `<button class="ssd-beacon-yes">Add</button>` +
+            `<button class="ssd-beacon-no">Cancel</button>`;
+        }
+        btn.replaceWith(confirmEl);
+
+        confirmEl.querySelector('.ssd-beacon-yes').addEventListener('click', async (e2) => {
+          e2.stopPropagation();
+          try {
+            await storeBeaconKey(hash8, pubkey);
+            const done = document.createElement('button');
+            done.className        = 'ssd-key-beacon ssd-indicator';
+            done.dataset.hash8    = hash8;
+            done.dataset.ssdState = 'KEY_BEACON_DONE';
+            done.textContent      = '✓ Key added';
+            done.disabled         = true;
+            confirmEl.replaceWith(done);
+            onImported();
+          } catch (err) {
+            const fail = document.createElement('button');
+            fail.className    = 'ssd-key-beacon ssd-indicator';
+            fail.dataset.hash8 = hash8;
+            fail.textContent  = '✗ Failed';
+            fail.disabled     = true;
+            confirmEl.replaceWith(fail);
+            console.error('[SSD] beacon import failed', err);
+          }
+        });
+
+        confirmEl.querySelector('.ssd-beacon-no').addEventListener('click', (e2) => {
+          e2.stopPropagation();
+          btn.disabled    = false;
+          btn.textContent = isDiff ? `🔑 Key differs (${hash8})` : `🔑 Add key (${hash8})`;
+          confirmEl.replaceWith(btn);
+        });
+      });
+
+      parent.style.position = 'relative';
+      parent.appendChild(btn);
+    };
   },
 };
 
