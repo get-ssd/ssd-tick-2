@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://www.facebook.com/*",
@@ -12,7 +12,8 @@
     "https://x.com/*",
     "https://idltd.github.io/*",
     "http://localhost:8080/*",
-    "http://127.0.0.1:8080/*"
+    "http://127.0.0.1:8080/*",
+    "http://localhost:8099/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"
@@ -21,6 +22,7 @@
     {
       "matches": ["http://localhost:8080/*", "http://127.0.0.1:8080/*"],
       "js": [
+        "core/cfg.js",
         "core/token-parser.js",
         "core/canon.js",
         "core/keyring.js",
@@ -40,6 +42,7 @@
     {
       "matches": ["https://www.facebook.com/*", "https://m.facebook.com/*"],
       "js": [
+        "core/cfg.js",
         "core/token-parser.js",
         "core/canon.js",
         "core/keyring.js",
@@ -51,6 +54,9 @@
         "core/platforms.js",
         "ui/badge.js",
         "ui/popup.js",
+        "analyser/panel.js",
+        "analyser/searcher.js",
+        "analyser/analyser.js",
         "platforms/facebook.js"
       ],
       "css": ["ui/styles.css"],
@@ -59,6 +65,7 @@
     {
       "matches": ["https://twitter.com/*", "https://x.com/*"],
       "js": [
+        "core/cfg.js",
         "core/token-parser.js",
         "core/canon.js",
         "core/keyring.js",
@@ -70,6 +77,9 @@
         "core/platforms.js",
         "ui/badge.js",
         "ui/popup.js",
+        "analyser/panel.js",
+        "analyser/searcher.js",
+        "analyser/analyser.js",
         "platforms/twitter.js"
       ],
       "css": ["ui/styles.css"],
@@ -78,6 +88,7 @@
     {
       "matches": ["https://www.reddit.com/*", "https://old.reddit.com/*"],
       "js": [
+        "core/cfg.js",
         "core/token-parser.js",
         "core/canon.js",
         "core/keyring.js",

@@ -152,6 +152,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true; // async response
   }
 
+  if (msg && msg.type === 'analyserLog') {
+    (async () => {
+      try {
+        await fetch(msg.collectorUrl, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    msg.payload,
+        });
+      } catch { /* collector offline — ignore */ }
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
+
   if (msg && msg.type === 'resolveKey') {
     (async () => {
       try {

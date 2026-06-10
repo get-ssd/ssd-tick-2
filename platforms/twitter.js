@@ -307,6 +307,9 @@ const twitter = {
         result._rawPostText = rawPostText;
         badge.update(badgeEl, result);
         commit();
+        if (CFG.analyser && typeof analyser !== 'undefined') {
+          analyser.analyse(textNode, parsedToken, rawPostText, 'twitter', result).catch(console.error);
+        }
       }
     } finally {
       scanning = false;
@@ -314,6 +317,7 @@ const twitter = {
   }
 
   keyring.load().then(() => {
+    if (CFG.analyser && typeof analyserPanel !== 'undefined') analyserPanel.init();
     twitter.observe(onNewContent);
   });
 

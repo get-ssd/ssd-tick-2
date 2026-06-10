@@ -222,6 +222,9 @@ const facebook = {
         result._rawPostText = rawPostText;
         badge.update(badgeEl, result);
         commit();
+        if (CFG.analyser && typeof analyser !== 'undefined') {
+          analyser.analyse(textNode, parsedToken, rawPostText, 'facebook', result).catch(console.error);
+        }
       }
     } finally {
       scanning = false;
@@ -229,6 +232,7 @@ const facebook = {
   }
 
   keyring.load().then(() => {
+    if (CFG.analyser && typeof analyserPanel !== 'undefined') analyserPanel.init();
     facebook.observe(onNewContent);
   });
 

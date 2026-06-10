@@ -101,6 +101,53 @@ const canon = {
     return { canonicalText: text, contentHash };
   },
 
+  // Verbose version of canonicalise — runs each CANON step and records the
+  // intermediate text state after each one. Returns the same { canonicalText,
+  // contentHash } as canonicalise(), plus a stages array for diagnostic logging.
+  // Each stage: { stage, json (JSON.stringify of text), byteLen }.
+  async canonicaliseVerbose(rawText) {
+    const stages = [];
+    const snap = (name, t) => {
+      stages.push({ stage: name, json: JSON.stringify(t),
+                    byteLen: new TextEncoder().encode(t).length });
+    };
+
+    let text = typeof rawText === 'string' ? rawText : String(rawText ?? '');
+    snap('input', text);
+
+    const lastTokenIdx = text.lastIndexOf('[SSD:');
+    if (lastTokenIdx !== -1) text = text.slice(0, lastTokenIdx);
+    snap('CANON-1 (strip-token)', text);
+
+    text = text.normalize('NFC');
+    snap('CANON-2 (NFC)', text);
+
+    text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    snap('CANON-3 (LF-normalise)', text);
+
+    text = text.split('\n').map(line => line.replace(/[ \t]+$/, '')).join('\n');
+    snap('CANON-4 (strip-trailing-ws)', text);
+
+    text = text.replace(/^\n+/, '');
+    snap('CANON-5 (strip-leading-blanks)', text);
+
+    text = text.replace(/\n+$/, '');
+    snap('CANON-6 (strip-trailing-blanks)', text);
+
+    text = this.wrap(text);
+    snap('CANON-7a (word-wrap)', text);
+
+    text = text + '\n';
+    snap('CANON-7 (trailing-LF)', text);
+
+    const bytes  = new TextEncoder().encode(text);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    const contentHash = Array.from(new Uint8Array(digest))
+      .map(b => b.toString(16).padStart(2, '0')).join('');
+
+    return { canonicalText: text, contentHash, stages };
+  },
+
   // Build the signed payload string (PROTO-Spec v0.4 §5):
   //   {hash8}:{identity}:{content-hash}:{timestamp}
   buildPayload(hash8, identity, contentHash, timestamp) {

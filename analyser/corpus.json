@@ -1,0 +1,86 @@
+{
+  "_note": "Fill 'url' for each entry after posting. Run the analyser and record findings in findings-stub.md.",
+  "version": "1",
+  "entries": [
+    {
+      "id": "fb-www-valid",
+      "url": "https://www.facebook.com/TODO",
+      "platform": "fb-desktop",
+      "expected_state": "VALID",
+      "strategy_b": true,
+      "notes": "Normal signed post; text matches exactly at signing and verification time."
+    },
+    {
+      "id": "fb-www-mismatch",
+      "url": "https://www.facebook.com/TODO",
+      "platform": "fb-desktop",
+      "expected_state": "MISMATCH",
+      "strategy_b": true,
+      "notes": "Sign the post, then edit the body text before verifying."
+    },
+    {
+      "id": "fb-www-invalid",
+      "url": "https://www.facebook.com/TODO",
+      "platform": "fb-desktop",
+      "expected_state": "INVALID",
+      "strategy_b": true,
+      "notes": "Corrupt the signature field in the token (change one character) before posting."
+    },
+    {
+      "id": "fb-www-valid-unknown",
+      "url": "https://www.facebook.com/TODO",
+      "platform": "fb-desktop",
+      "expected_state": "VALID_UNKNOWN",
+      "strategy_b": true,
+      "notes": "Signed with a key not imported into the local keyring. Sig is valid but signer is unrecognised."
+    },
+    {
+      "id": "fb-www-url-hint",
+      "url": "https://www.facebook.com/TODO",
+      "platform": "fb-desktop",
+      "expected_state": "VALID",
+      "strategy_b": true,
+      "notes": "Identity hint is url:https://... — verifier fetches key card from the URL."
+    },
+    {
+      "id": "fb-www-fb-hint",
+      "url": "https://www.facebook.com/TODO",
+      "platform": "fb-desktop",
+      "expected_state": "VALID",
+      "strategy_b": true,
+      "notes": "Identity hint is fb:j.smith — tricky handle-style identity."
+    },
+    {
+      "id": "fb-mobile-valid",
+      "url": "https://m.facebook.com/TODO",
+      "platform": "fb-mobile",
+      "expected_state": "VALID",
+      "strategy_b": true,
+      "notes": "Primary Strategy B test on mobile FB. Decisive: if B recovers here, suffix search works on m.facebook.com."
+    },
+    {
+      "id": "fb-mobile-mismatch",
+      "url": "https://m.facebook.com/TODO",
+      "platform": "fb-mobile",
+      "expected_state": "MISMATCH",
+      "strategy_b": true,
+      "notes": "Mobile FB with post edited after signing."
+    },
+    {
+      "id": "tw-valid",
+      "url": "https://twitter.com/TODO",
+      "platform": "twitter",
+      "expected_state": "VALID",
+      "strategy_b": false,
+      "notes": "Twitter reply-path token. Strategy A only. Signed tweet body is the parent tweet."
+    },
+    {
+      "id": "tw-mismatch",
+      "url": "https://twitter.com/TODO",
+      "platform": "twitter",
+      "expected_state": "MISMATCH",
+      "strategy_b": false,
+      "notes": "Twitter: edit the parent tweet body after signing (quote-tweet the original to surface a comparison if needed)."
+    }
+  ]
+}
