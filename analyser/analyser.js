@@ -38,12 +38,16 @@ const analyser = (() => {
       case 'a-done':
         return '  A  result  content8=' + e.content8 +
                '  token=' + (e.tokenContent8 || '(none)') + '  match=' + e.match;
+      case 'raw-text-info':
+        return '  RAW  ' + e.byteLen + 'b  start="' + e.start + '"  tail="' + e.tail + '"';
       case 'b-skip':   return '  B  (skip: ' + e.reason + ')';
       case 'b-done':
         return '  B  ' + e.outcome +
                (e.winner ? '  winner=d' + e.winner.depth + ' s' + e.winner.suffixCount +
                 ' ' + e.winner.variantId : '  winner=none') +
                '  cache=' + e.cacheUsed + '  attempts=' + e.attemptCount;
+      case 'b-winner-text':
+        return '  B    winner-text  ' + e.byteLen + 'b  "' + e.start + '"';
       case 'b-attempt':
         return '  B    d' + e.depth + ' s' + e.suffixCount + ' ' + e.variantId +
                '  c8=' + e.computedContent8 + '  match=' + e.c8Match;
@@ -137,6 +141,14 @@ const analyser = (() => {
       return;
     }
 
+    // Log what readPostText actually extracted — start and tail expose chrome bleed-in.
+    _log({
+      type:    'raw-text-info',
+      byteLen: new TextEncoder().encode(preToken).length,
+      start:   preToken.slice(0, 80).replace(/\n/g, '↵'),
+      tail:    preToken.slice(-60).replace(/\n/g, '↵'),
+    });
+
     // ── Strategy A: rawPostText through canon, stage by stage ──────────────────
     const stageA = await canon.canonicaliseVerbose(rawPostText);
     for (const s of stageA.stages) {
@@ -161,6 +173,12 @@ const analyser = (() => {
              cacheUsed: bResult.cacheUsed, attemptCount: bResult.attempts.length });
       if (bResult.outcome === 'SEARCH_EXHAUSTED' || bResult.outcome === 'CACHE_STALE') {
         for (const a of bResult.attempts) _log({ type: 'b-attempt', ...a });
+      } else if (bResult.outcome === 'RECOVERED' && bResult.winner) {
+        const w    = bResult.winner;
+        const winA = bResult.attempts.find(a =>
+          a.depth === w.depth && a.suffixCount === w.suffixCount && a.variantId === w.variantId
+        );
+        if (winA) _log({ type: 'b-winner-text', byteLen: winA.byteLen, start: winA.canonJson.slice(1, 80) });
       }
     }
 
