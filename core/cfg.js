@@ -6,7 +6,7 @@
 // it at runtime from devtools: CFG.analyser = true; then reload the page.
 
 const CFG = {
-  analyser:             true,
+  analyser:             false,
   analyserCollectorUrl: 'http://localhost:8099/log',
   maxAncestorDepth:     6,
   maxSuffixBlocks:      10,
