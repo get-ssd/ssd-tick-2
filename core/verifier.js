@@ -4,7 +4,7 @@
 //
 // Depends on: tokenParser, canon, keyring, vault (loaded before this file by
 // the manifest). Key resolution that needs a network fetch is delegated to the
-// background service worker via chrome.runtime.sendMessage.
+// background via ext.runtime.sendMessage.
 
 const verifier = {
 
@@ -25,7 +25,7 @@ const verifier = {
     if (local) return local;
 
     try {
-      const resp = await chrome.runtime.sendMessage({
+      const resp = await ext.runtime.sendMessage({
         type: 'resolveKey',
         hash8,
         identity,

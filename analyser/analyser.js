@@ -70,8 +70,8 @@ const analyser = (() => {
   }
 
   function _ship(entry) {
-    if (typeof chrome === 'undefined' || !chrome.runtime) return;
-    chrome.runtime.sendMessage({
+    if (typeof ext === 'undefined' || !ext.runtime) return;
+    ext.runtime.sendMessage({
       type:         'analyserLog',
       collectorUrl: CFG.analyserCollectorUrl,
       payload:      JSON.stringify(entry),
@@ -187,9 +187,9 @@ const analyser = (() => {
     // ── Key resolution ────────────────────────────────────────────────────────
     let key     = (typeof keyring !== 'undefined') ? keyring.get(parsedToken.hash8) : null;
     let keyPath = key ? 'local-keyring' : null;
-    if (!key && typeof chrome !== 'undefined' && chrome.runtime) {
+    if (!key && typeof ext !== 'undefined' && ext.runtime) {
       try {
-        const resp = await chrome.runtime.sendMessage({
+        const resp = await ext.runtime.sendMessage({
           type: 'resolveKey', hash8: parsedToken.hash8, identity: parsedToken.identity,
         });
         if (resp && resp.ok && resp.key) {

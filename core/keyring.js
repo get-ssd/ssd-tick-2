@@ -1,5 +1,5 @@
 // core/keyring.js
-// Local key storage, lookup and trust level. Backed by chrome.storage.local
+// Local key storage, lookup and trust level. Backed by ext.storage.local
 // under the "keystore" key — a flat object keyed by hash8. See the
 // Keystore Schema section of the prompt for the full record shape.
 
@@ -11,11 +11,11 @@ const keyring = {
   // Load the keystore into the in-memory cache. Also wires a storage.onChanged
   // listener once so the cache stays fresh when the toolbar popup edits keys.
   async load() {
-    const data = await chrome.storage.local.get('keystore');
+    const data = await ext.storage.local.get('keystore');
     this._cache = data.keystore || {};
     if (!this._loaded) {
       this._loaded = true;
-      chrome.storage.onChanged.addListener((changes, area) => {
+      ext.storage.onChanged.addListener((changes, area) => {
         if (area === 'local' && changes.keystore) {
           this._cache = changes.keystore.newValue || {};
         }
@@ -40,19 +40,19 @@ const keyring = {
   // Import a key record into the keystore (used by service worker auto-fetch).
   // record must already contain a hash8. Returns the stored record.
   async put(record) {
-    const data = await chrome.storage.local.get('keystore');
+    const data = await ext.storage.local.get('keystore');
     const ks = data.keystore || {};
     ks[record.hash8] = record;
-    await chrome.storage.local.set({ keystore: ks });
+    await ext.storage.local.set({ keystore: ks });
     this._cache = ks;
     return record;
   },
 
   async remove(hash8) {
-    const data = await chrome.storage.local.get('keystore');
+    const data = await ext.storage.local.get('keystore');
     const ks = data.keystore || {};
     delete ks[hash8];
-    await chrome.storage.local.set({ keystore: ks });
+    await ext.storage.local.set({ keystore: ks });
     this._cache = ks;
   },
 

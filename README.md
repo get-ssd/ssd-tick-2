@@ -1,19 +1,58 @@
 # SSD Tick — Browser Extension
 
-Chrome MV3 extension that detects and verifies SSD-signed posts on social media. When you visit a page that contains a signed post, Tick finds the token, verifies the Ed25519 signature, and shows a badge on the post.
+Browser extension that detects and verifies SSD-signed posts on social media. When you visit a page that contains a signed post, Tick finds the token, verifies the Ed25519 signature, and shows a badge on the post.
 
-Current version: **0.2.0**
+- **Firefox** (all platforms, including Firefox for Android) — primary delivery target
+- **Chrome** (desktop only — Chrome for Android does not support extensions)
+
+Current version: **0.4.0**
 
 ---
 
-## Loading the extension
+## Shell layout
+
+Two shells share the same codebase. The shell boundary is one manifest file and one background script each:
+
+| | Chrome | Firefox |
+|---|---|---|
+| Manifest | `manifest.json` | `manifest-firefox.json` |
+| Background | `background/service-worker.js` | `background/background.js` |
+
+Everything else (`core/`, `platforms/`, `ui/`, `scanners/`, `analyser/`, `popup/`) is shared. Shared files use the `ext` shim (`globalThis.browser ?? globalThis.chrome`) so they work in both contexts without changes.
+
+---
+
+## Loading on Firefox
+
+### Desktop (about:debugging)
+
+1. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on…**
+2. Navigate to `ssd-tick-2/` and select **`manifest-firefox.json`**
+
+Tick appears in the add-ons list. The toolbar icon opens the key manager popup.
+
+### Firefox for Android (web-ext)
+
+Prerequisites: ADB connected, `web-ext` installed (`npm i -g web-ext`).
+
+```bash
+cd ssd-tick-2
+web-ext run --target firefox-android \
+  --firefox-apk org.mozilla.fenix \
+  --source-dir . \
+  --filename manifest-firefox.json
+```
+
+If `web-ext` does not support `--filename`, rename `manifest-firefox.json` → `manifest.json` temporarily (back up the Chrome one first), run `web-ext run --target firefox-android`, then restore.
+
+---
+
+## Loading on Chrome (desktop)
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
-4. Select the `ssd-tick-2/` directory
-
-Tick should appear in the extensions list with no errors. Pin it to the toolbar to access the key manager popup.
+4. Select the `ssd-tick-2/` directory (Chrome picks up `manifest.json` automatically)
 
 ---
 
@@ -26,7 +65,7 @@ Before Tick can show a green VALID badge it needs the signer's public key.
 3. Use the key card import section in the popup to paste or load the JSON
 4. The badge on any matching posts updates immediately
 
-Key cards are stored in `chrome.storage.local` and persist across sessions.
+Key cards are stored in extension local storage and persist across sessions.
 
 ---
 
@@ -82,9 +121,11 @@ Click any badge to open the in-page popup with signer name, hash8, and timestamp
 
 ```
 ssd-tick-2/
-├── manifest.json               MV3 manifest; content script load order; host_permissions
+├── manifest.json               Chrome MV3 shell manifest
+├── manifest-firefox.json       Firefox MV3 shell manifest
 ├── background/
-│   └── service-worker.js       Background worker (message routing)
+│   ├── service-worker.js       Chrome shell background (service worker)
+│   └── background.js           Firefox shell background (event-page)
 ├── core/
 │   ├── canon.js                Canonicalisation (NFC + whitespace rules per CANON-Spec)
 │   ├── keyring.js              Key card storage and lookup (chrome.storage.local)

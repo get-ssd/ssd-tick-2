@@ -3,15 +3,17 @@
 // lists stored keys with provenance and credibility, imports key cards (with
 // self-signature verification), and deletes keys.
 //
-// Keystore layout in chrome.storage.local: { keystore: { [hash8]: keyRecord } }
+// Keystore layout in ext.storage.local: { keystore: { [hash8]: keyRecord } }
+
+const ext = globalThis.browser ?? globalThis.chrome;
 
 async function getKeystore() {
-  const data = await chrome.storage.local.get('keystore');
+  const data = await ext.storage.local.get('keystore');
   return data.keystore || {};
 }
 
 async function saveKeystore(ks) {
-  await chrome.storage.local.set({ keystore: ks });
+  await ext.storage.local.set({ keystore: ks });
 }
 
 function b64ToBytes(b64) {
@@ -174,7 +176,7 @@ async function savePwaUrl(raw) {
     msgEl.style.color = 'var(--danger)';
     return;
   }
-  await chrome.storage.local.set({ pwaUrl: raw });
+  await ext.storage.local.set({ pwaUrl: raw });
   msgEl.textContent = raw ? 'Saved.' : 'Cleared.';
   msgEl.style.color = 'var(--text-muted)';
   setTimeout(() => { msgEl.textContent = ''; }, 2000);
@@ -184,15 +186,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   renderKeys(await getKeystore());
 
   // Populate the URL input from storage on open.
-  const stored = await chrome.storage.local.get('pwaUrl');
+  const stored = await ext.storage.local.get('pwaUrl');
   const urlInput = document.getElementById('pwa-url-input');
   if (urlInput && stored.pwaUrl) urlInput.value = stored.pwaUrl;
 
   // Open SSD button — always visible; if no URL saved, scroll to the setting.
   document.getElementById('open-pwa-btn').addEventListener('click', async () => {
-    const data = await chrome.storage.local.get('pwaUrl');
+    const data = await ext.storage.local.get('pwaUrl');
     if (data.pwaUrl) {
-      chrome.tabs.create({ url: data.pwaUrl });
+      ext.tabs.create({ url: data.pwaUrl });
     } else {
       const section = document.getElementById('pwa-section');
       if (section) {

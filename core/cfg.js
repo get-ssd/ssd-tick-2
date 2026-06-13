@@ -5,6 +5,11 @@
 // To enable the diagnostic analyser: set CFG.analyser = true here, or toggle
 // it at runtime from devtools: CFG.analyser = true; then reload the page.
 
+// Cross-browser shim: Firefox exposes `browser`, Chrome exposes `chrome`.
+// Declared as var so content scripts loaded after this file can use ext freely.
+// eslint-disable-next-line no-var
+var ext = globalThis.browser ?? globalThis.chrome;
+
 const CFG = {
   analyser:             false,
   analyserCollectorUrl: 'http://localhost:8099/log',

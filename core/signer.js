@@ -51,7 +51,7 @@ const signer = {
     // 5. Request signature from service worker (which opens PWA for biometric confirmation).
     let resp;
     try {
-      resp = await chrome.runtime.sendMessage({
+      resp = await ext.runtime.sendMessage({
         type: 'SSD_SIGN_REQUEST',
         payload: { hash8, signedPayload: payload, platform, previewText: canonicalText },
       });

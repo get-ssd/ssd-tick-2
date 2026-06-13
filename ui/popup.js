@@ -125,7 +125,7 @@ const verificationPopup = {
   async show(anchorEl, result) {
     this.remove();
 
-    const stored = await chrome.storage.local.get('pwaUrl');
+    const stored = await ext.storage.local.get('pwaUrl');
     const pwaUrl = stored.pwaUrl ? stored.pwaUrl.replace(/\/+$/, '') : null;
 
     const rect = anchorEl.getBoundingClientRect();
