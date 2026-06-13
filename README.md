@@ -13,10 +13,10 @@ Current version: **0.4.0**
 
 Two shells share the same codebase. The shell boundary is one manifest file and one background script each:
 
-| | Chrome | Firefox |
+| | Firefox | Chrome |
 |---|---|---|
-| Manifest | `manifest.json` | `manifest-firefox.json` |
-| Background | `background/service-worker.js` | `background/background.js` |
+| Manifest | `manifest.json` | `manifest-chrome.json` |
+| Background | `background/background.js` | `background/service-worker.js` |
 
 Everything else (`core/`, `platforms/`, `ui/`, `scanners/`, `analyser/`, `popup/`) is shared. Shared files use the `ext` shim (`globalThis.browser ?? globalThis.chrome`) so they work in both contexts without changes.
 
@@ -27,32 +27,36 @@ Everything else (`core/`, `platforms/`, `ui/`, `scanners/`, `analyser/`, `popup/
 ### Desktop (about:debugging)
 
 1. Open `about:debugging` → **This Firefox** → **Load Temporary Add-on…**
-2. Navigate to `ssd-tick-2/` and select **`manifest-firefox.json`**
+2. Navigate to `ssd-tick-2/` and select **`manifest.json`**
 
 Tick appears in the add-ons list. The toolbar icon opens the key manager popup.
 
-### Firefox for Android (web-ext)
+### Firefox for Android (side-load .xpi)
 
-Prerequisites: ADB connected, `web-ext` installed (`npm i -g web-ext`).
+1. Run `build-firefox.bat` from `ssd-tick-2\` — produces `ssd-tick-firefox.xpi`
+2. Transfer the `.xpi` to your Android device (email, cloud drive, ADB, etc.)
+3. In Firefox for Android: tap the `.xpi` file to install, or go to
+   **Settings → Add-ons → ⚙ → Install add-on from file**
+
+Alternatively with `web-ext` (ADB connected, `npm i -g web-ext`):
 
 ```bash
 cd ssd-tick-2
-web-ext run --target firefox-android \
-  --firefox-apk org.mozilla.fenix \
-  --source-dir . \
-  --filename manifest-firefox.json
+web-ext run --target firefox-android --firefox-apk org.mozilla.fenix
 ```
-
-If `web-ext` does not support `--filename`, rename `manifest-firefox.json` → `manifest.json` temporarily (back up the Chrome one first), run `web-ext run --target firefox-android`, then restore.
 
 ---
 
 ## Loading on Chrome (desktop)
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode** (top-right toggle)
-3. Click **Load unpacked**
-4. Select the `ssd-tick-2/` directory (Chrome picks up `manifest.json` automatically)
+Both browsers require the manifest to be named `manifest.json`. To load in Chrome, rename temporarily:
+
+```
+manifest.json        → manifest-firefox.json   (back up)
+manifest-chrome.json → manifest.json
+```
+
+Then load unpacked from `ssd-tick-2/` via `chrome://extensions` → Developer mode → Load unpacked. Restore the names afterwards.
 
 ---
 
@@ -121,8 +125,8 @@ Click any badge to open the in-page popup with signer name, hash8, and timestamp
 
 ```
 ssd-tick-2/
-├── manifest.json               Chrome MV3 shell manifest
-├── manifest-firefox.json       Firefox MV3 shell manifest
+├── manifest.json               Firefox MV3 shell manifest (primary)
+├── manifest-chrome.json        Chrome MV3 shell manifest (desktop dev)
 ├── background/
 │   ├── service-worker.js       Chrome shell background (service worker)
 │   └── background.js           Firefox shell background (event-page)

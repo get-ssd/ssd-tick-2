@@ -2,11 +2,6 @@
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
   "version": "0.4.0",
-  "browser_specific_settings": {
-    "gecko": {
-      "id": "ssd@idltd.com"
-    }
-  },
   "permissions": ["storage", "tabs"],
   "host_permissions": [
     "https://www.facebook.com/*",
@@ -21,7 +16,7 @@
     "http://localhost:8099/*"
   ],
   "background": {
-    "scripts": ["background/background.js"]
+    "service_worker": "background/service-worker.js"
   },
   "content_scripts": [
     {
