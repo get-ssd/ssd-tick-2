@@ -167,7 +167,10 @@ const textScanner = {
       });
     }
 
+    const _shown = new Set();
+
     return function handleKeyBeacon(hash8, pubkey, anchorNode) {
+      if (_shown.has(hash8)) return;
       const parent = anchorNode.parentElement || anchorNode.parentNode;
       if (!parent) return;
       if (parent.querySelector &&
@@ -187,21 +190,29 @@ const textScanner = {
         btn.textContent = `🔑 Key known (${hash8})`;
         btn.disabled    = true;
         btn.title       = `SSD key ${hash8} is already in your keyring`;
+        _shown.add(hash8);
         parent.style.position = 'relative';
         parent.appendChild(btn);
         return;
       }
 
+      // Key conflict — user must remove existing key manually before adding.
       if (isDiff) {
         btn.dataset.ssdState = 'KEY_BEACON_DIFFERENT';
-        btn.textContent = `🔑 Key differs (${hash8})`;
-        btn.title       = `SSD — you know ${hash8} under a different key. Click to review.`;
-      } else {
-        btn.dataset.ssdState = 'KEY_BEACON_NEW';
-        btn.textContent = `🔑 Add key (${hash8})`;
-        btn.title       = `SSD key beacon — click to add signer ${hash8} to your keyring`;
+        btn.textContent = `🔑 Key conflict — remove existing first (${hash8})`;
+        btn.title       = `SSD — a different key for ${hash8} is already in your keyring. Remove it via the popup before adding this one.`;
+        btn.disabled    = true;
+        _shown.add(hash8);
+        parent.style.position = 'relative';
+        parent.appendChild(btn);
+        return;
       }
 
+      btn.dataset.ssdState = 'KEY_BEACON_NEW';
+      btn.textContent = `🔑 Add key (${hash8})`;
+      btn.title       = `SSD key beacon — click to add signer ${hash8} to your keyring`;
+
+      btn.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); }, { passive: false });
       btn.addEventListener('click', async (e) => {
         e.stopPropagation();
         btn.disabled    = true;
@@ -224,53 +235,20 @@ const textScanner = {
           return;
         }
 
-        // Replace button with inline confirmation panel.
-        const confirmEl = document.createElement('span');
-        confirmEl.className = 'ssd-beacon-confirm';
-        if (isDiff) {
-          confirmEl.innerHTML =
-            `<span class="ssd-beacon-msg">Key differs — replace existing <span class="ssd-mono">${hash8}</span>?</span>` +
-            `<button class="ssd-beacon-yes">Replace</button>` +
-            `<button class="ssd-beacon-no">Keep</button>`;
-        } else {
-          confirmEl.innerHTML =
-            `<span class="ssd-beacon-msg">Add key <span class="ssd-mono">${hash8}</span>?</span>` +
-            `<button class="ssd-beacon-yes">Add</button>` +
-            `<button class="ssd-beacon-no">Cancel</button>`;
+        try {
+          await storeBeaconKey(hash8, pubkey);
+          btn.dataset.ssdState = 'KEY_BEACON_DONE';
+          btn.textContent      = '✓ Key added';
+          onImported();
+        } catch (err) {
+          btn.textContent      = '✗ Failed';
+          btn.dataset.ssdState = 'KEY_BEACON_FAIL';
+          btn.disabled         = true;
+          console.error('[SSD] beacon import failed', err);
         }
-        btn.replaceWith(confirmEl);
-
-        confirmEl.querySelector('.ssd-beacon-yes').addEventListener('click', async (e2) => {
-          e2.stopPropagation();
-          try {
-            await storeBeaconKey(hash8, pubkey);
-            const done = document.createElement('button');
-            done.className        = 'ssd-key-beacon ssd-indicator';
-            done.dataset.hash8    = hash8;
-            done.dataset.ssdState = 'KEY_BEACON_DONE';
-            done.textContent      = '✓ Key added';
-            done.disabled         = true;
-            confirmEl.replaceWith(done);
-            onImported();
-          } catch (err) {
-            const fail = document.createElement('button');
-            fail.className    = 'ssd-key-beacon ssd-indicator';
-            fail.dataset.hash8 = hash8;
-            fail.textContent  = '✗ Failed';
-            fail.disabled     = true;
-            confirmEl.replaceWith(fail);
-            console.error('[SSD] beacon import failed', err);
-          }
-        });
-
-        confirmEl.querySelector('.ssd-beacon-no').addEventListener('click', (e2) => {
-          e2.stopPropagation();
-          btn.disabled    = false;
-          btn.textContent = isDiff ? `🔑 Key differs (${hash8})` : `🔑 Add key (${hash8})`;
-          confirmEl.replaceWith(btn);
-        });
       });
 
+      _shown.add(hash8);
       parent.style.position = 'relative';
       parent.appendChild(btn);
     };

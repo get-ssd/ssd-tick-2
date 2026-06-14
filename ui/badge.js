@@ -51,7 +51,10 @@ const badge = {
         verificationPopup.show(el, el._ssdResult);
       }
     };
+    const block = (e) => { e.stopPropagation(); e.preventDefault(); };
     el.addEventListener('click', open);
+    el.addEventListener('touchstart', block, { passive: false });
+    el.addEventListener('touchend',   open,  { passive: false });
     el.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') open(e);
     });

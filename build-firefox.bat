@@ -1,30 +1,37 @@
 @echo off
-:: Packages the Firefox shell into an .xpi (zip) for side-loading on Firefox for Android.
-:: Output: ssd-tick-firefox.xpi in the current directory.
+:: Packages the Firefox shell into an .xpi for side-loading on Firefox for Android.
+:: Output: dist\ssd-tick-firefox.xpi
 :: Usage: run from ssd-tick-2\
+:: Note: uses ZipArchive.CreateEntry to ensure forward-slash paths (required by Firefox).
 
-set OUT=ssd-tick-firefox.xpi
+if not exist dist mkdir dist
+set OUT=dist\ssd-tick-firefox.xpi
 if exist "%OUT%" del "%OUT%"
 
 powershell -NoProfile -Command ^
   "Add-Type -Assembly 'System.IO.Compression.FileSystem'; " ^
-  "$src = Resolve-Path '.'; " ^
-  "$dst = Join-Path $src 'ssd-tick-firefox.xpi'; " ^
-  "$excludes = @('ssd-tick-firefox.xpi','manifest-chrome.json','build-firefox.bat','.git','.gitignore','test'); " ^
-  "$tmp = [System.IO.Path]::GetTempPath() + [System.Guid]::NewGuid(); " ^
-  "New-Item -ItemType Directory $tmp | Out-Null; " ^
-  "Get-ChildItem -Path $src -Recurse | Where-Object { " ^
-  "  $rel = $_.FullName.Substring($src.Path.Length+1); " ^
+  "Add-Type -Assembly 'System.IO.Compression'; " ^
+  "$src = (Resolve-Path '.').Path; " ^
+  "$dst = Join-Path $src 'dist\ssd-tick-firefox.xpi'; " ^
+  "$excludeTop = @('dist','.git','test'); " ^
+  "$excludeNames = @('manifest-chrome.json','build-firefox.bat','build-chrome.bat','.gitignore'); " ^
+  "$excludeRel = @('background\service-worker.js'); " ^
+  "$fs = [System.IO.File]::Open($dst, [System.IO.FileMode]::Create); " ^
+  "$zip = New-Object System.IO.Compression.ZipArchive($fs, [System.IO.Compression.ZipArchiveMode]::Create); " ^
+  "Get-ChildItem -Path $src -Recurse -File | ForEach-Object { " ^
+  "  $rel = $_.FullName.Substring($src.Length+1); " ^
   "  $top = $rel.Split([IO.Path]::DirectorySeparatorChar)[0]; " ^
-  "  -not ($excludes -contains $top) -and -not ($excludes -contains $_.Name) " ^
-  "} | ForEach-Object { " ^
-  "  $rel = $_.FullName.Substring($src.Path.Length+1); " ^
-  "  $dest = Join-Path $tmp $rel; " ^
-  "  if ($_.PSIsContainer) { New-Item -ItemType Directory -Force $dest | Out-Null } " ^
-  "  else { New-Item -ItemType File -Force $dest | Out-Null; Copy-Item $_.FullName $dest } " ^
+  "  if ($excludeTop -contains $top) { return }; " ^
+  "  if ($excludeNames -contains $_.Name) { return }; " ^
+  "  if ($excludeRel -contains $rel) { return }; " ^
+  "  $entryName = $rel.Replace('\', '/'); " ^
+  "  $entry = $zip.CreateEntry($entryName, [System.IO.Compression.CompressionLevel]::Optimal); " ^
+  "  $es = $entry.Open(); " ^
+  "  $fs2 = [System.IO.File]::OpenRead($_.FullName); " ^
+  "  $fs2.CopyTo($es); " ^
+  "  $fs2.Dispose(); $es.Dispose() " ^
   "}; " ^
-  "[System.IO.Compression.ZipFile]::CreateFromDirectory($tmp, $dst); " ^
-  "Remove-Item -Recurse -Force $tmp"
+  "$zip.Dispose(); $fs.Dispose()"
 
 if exist "%OUT%" (
   echo Built: %OUT%
