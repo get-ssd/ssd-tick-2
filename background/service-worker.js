@@ -144,6 +144,25 @@ async function getPwaUrl() {
   return data.pwaUrl ? data.pwaUrl.replace(/\/+$/, '') : null;
 }
 
+// ── Context menu (Chrome) — "Sign this text" ─────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id:       'ssd-sign-this',
+      title:    '🔏 Sign this text (SSD)',
+      contexts: ['editable'],
+    });
+  });
+});
+
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== 'ssd-sign-this') return;
+  if (!tab || !tab.id) return;
+  chrome.tabs.sendMessage(tab.id, { type: 'SSD_SIGN_THIS', source: 'context-menu' })
+    .catch(err => console.warn('[SSD] Sign-this-text: no content script on tab', err));
+});
+
 // ── message handling ─────────────────────────────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
