@@ -167,14 +167,28 @@ const textScanner = {
       });
     }
 
-    const _shown = new Set();
+    // Walk up from anchorNode to find the first ancestor not clipped by
+    // overflow:hidden — mobile Facebook collapses the bio section with a
+    // height-constrained overflow:hidden container, which hides any button
+    // appended inside it in portrait orientation. We inject just outside that
+    // boundary so the button is always visible regardless of viewport width.
+    // Bounded to 8 levels to keep getComputedStyle calls cheap.
+    function findInsertParent(node) {
+      let el = node.parentElement || node.parentNode;
+      for (let i = 0; i < 8 && el && el !== document.body; i++, el = el.parentElement) {
+        const s = window.getComputedStyle(el);
+        if (s.overflow !== 'hidden' && s.overflowY !== 'hidden') return el;
+      }
+      return node.parentElement || node.parentNode || document.body;
+    }
 
     return function handleKeyBeacon(hash8, pubkey, anchorNode) {
-      if (_shown.has(hash8)) return;
-      const parent = anchorNode.parentElement || anchorNode.parentNode;
+      // Document-level dedup: allows re-injection if the host page removes the
+      // button (e.g. React re-render), while still preventing duplicates when
+      // the button is already present.
+      if (document.querySelector('.ssd-key-beacon[data-hash8="' + hash8 + '"]')) return;
+      const parent = findInsertParent(anchorNode);
       if (!parent) return;
-      if (parent.querySelector &&
-          parent.querySelector('.ssd-key-beacon[data-hash8="' + hash8 + '"]')) return;
 
       const existing = keyring.get(hash8);
       const isSame   = existing && existing.public_key === pubkey;
@@ -190,8 +204,6 @@ const textScanner = {
         btn.textContent = `🔑 Key known (${hash8})`;
         btn.disabled    = true;
         btn.title       = `SSD key ${hash8} is already in your keyring`;
-        _shown.add(hash8);
-        parent.style.position = 'relative';
         parent.appendChild(btn);
         return;
       }
@@ -202,8 +214,6 @@ const textScanner = {
         btn.textContent = `🔑 Key conflict — remove existing first (${hash8})`;
         btn.title       = `SSD — a different key for ${hash8} is already in your keyring. Remove it via the popup before adding this one.`;
         btn.disabled    = true;
-        _shown.add(hash8);
-        parent.style.position = 'relative';
         parent.appendChild(btn);
         return;
       }
@@ -248,8 +258,6 @@ const textScanner = {
         }
       });
 
-      _shown.add(hash8);
-      parent.style.position = 'relative';
       parent.appendChild(btn);
     };
   },
