@@ -1,2 +1,4 @@
 .devmode
 .claude/
+test/node_modules/
+dist/
