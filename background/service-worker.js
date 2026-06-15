@@ -144,6 +144,36 @@ async function getPwaUrl() {
   return data.pwaUrl ? data.pwaUrl.replace(/\/+$/, '') : null;
 }
 
+// ── Sign-request correlation ──────────────────────────────────────────────────
+// Maps request_id → { resolve, reject, tabId, timer } for in-flight sign requests.
+
+const _pendingSign = new Map();
+const SIGN_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
+chrome.tabs.onRemoved.addListener(tabId => {
+  for (const [reqId, pending] of _pendingSign) {
+    if (pending.tabId === tabId) {
+      clearTimeout(pending.timer);
+      _pendingSign.delete(reqId);
+      pending.reject(new Error('Sign window was closed'));
+    }
+  }
+});
+
+chrome.runtime.onMessageExternal.addListener((msg, _sender, _sendResponse) => {
+  if (!msg || msg.type !== 'SSD_SIGN_RESPONSE') return;
+  const pending = _pendingSign.get(msg.requestId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  _pendingSign.delete(msg.requestId);
+  if (pending.tabId) chrome.tabs.remove(pending.tabId).catch(() => {});
+  if (msg.error) {
+    pending.reject(new Error(msg.error));
+  } else {
+    pending.resolve({ ok: true, signature: msg.signature });
+  }
+});
+
 // ── Context menu (Chrome) — "Sign this text" ─────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
@@ -210,5 +240,47 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     })();
     return true; // async response
   }
+
+  if (msg && msg.type === 'SSD_SIGN_REQUEST') {
+    (async () => {
+      const { hash8, signedPayload, platform, previewText } = msg.payload || {};
+      const pwaBase = await getPwaUrl();
+      if (!pwaBase) {
+        sendResponse({ ok: false, error: 'PWA URL not configured — set it in the SSD popup.' });
+        return;
+      }
+      const extId = chrome.runtime.id;
+      const requestId = crypto.randomUUID();
+
+      const params = new URLSearchParams({
+        request_id:     requestId,
+        ext_id:         extId,
+        fingerprint:    hash8,
+        signed_payload: signedPayload,
+        platform:       platform || '',
+        preview:        previewText || '',
+      });
+      const signUrl = `${pwaBase}/sign.html?${params.toString()}`;
+
+      const result = await new Promise((resolve, reject) => {
+        chrome.tabs.create({ url: signUrl, active: true }, tab => {
+          if (chrome.runtime.lastError || !tab) {
+            reject(new Error(chrome.runtime.lastError?.message || 'Failed to open sign tab'));
+            return;
+          }
+          const timer = setTimeout(() => {
+            _pendingSign.delete(requestId);
+            chrome.tabs.remove(tab.id).catch(() => {});
+            reject(new Error('Sign request timed out'));
+          }, SIGN_TIMEOUT_MS);
+          _pendingSign.set(requestId, { resolve, reject, tabId: tab.id, timer });
+        });
+      });
+
+      sendResponse(result);
+    })().catch(err => sendResponse({ ok: false, error: err.message || String(err) }));
+    return true; // async response
+  }
+
   return false;
 });

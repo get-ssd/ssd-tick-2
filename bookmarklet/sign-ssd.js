@@ -15,13 +15,13 @@
 //
 // ── javascript: URL (copy this into the bookmark's address field) ──────────
 //
-// javascript:(function(){var PWA_URL='http://localhost:8080';function isEditable(e){if(!e)return false;if(e.isContentEditable)return true;var t=e.tagName;if(t==='TEXTAREA')return true;if(t==='INPUT'){var tp=(e.type||'').toLowerCase();return !tp||tp==='text'||tp==='search'||tp==='email'||tp==='url';}return false;}function getText(e){if(!e)return'';return e.tagName==='TEXTAREA'||e.tagName==='INPUT'?e.value:(e.innerText||e.textContent||'');}var text='';var active=document.activeElement;if(isEditable(active)){text=getText(active);}else{var cands=Array.from(document.querySelectorAll('textarea,[contenteditable="true"],[contenteditable=""],input[type="text"],input:not([type])')).filter(function(e){return getText(e).trim().length>0;});if(cands.length>0){cands.sort(function(a,b){return getText(b).length-getText(a).length;});text=getText(cands[0]);}}text=text.replace(/\s*\[SSD:[^\]]+\]\s*$/,'').trim();if(!text){alert('SSD Sign: No compose field found.\nTap the field you are composing in, then try again.');return;}window.open(PWA_URL+'/sign.html?action=sign&context=bookmarklet&text='+encodeURIComponent(text),'_blank');})();
+// javascript:(function(){var PWA_URL='https://idltd.github.io/SignedSealedDelivered';function isEditable(e){if(!e)return false;if(e.isContentEditable)return true;var t=e.tagName;if(t==='TEXTAREA')return true;if(t==='INPUT'){var tp=(e.type||'').toLowerCase();return !tp||tp==='text'||tp==='search'||tp==='email'||tp==='url';}return false;}function getText(e){if(!e)return'';return e.tagName==='TEXTAREA'||e.tagName==='INPUT'?e.value:(e.innerText||e.textContent||'');}var text='';var active=document.activeElement;if(isEditable(active)){text=getText(active);}else{var cands=Array.from(document.querySelectorAll('textarea,[contenteditable="true"],[contenteditable=""],input[type="text"],input:not([type])')).filter(function(e){return getText(e).trim().length>0;});if(cands.length>0){cands.sort(function(a,b){return getText(b).length-getText(a).length;});text=getText(cands[0]);}}text=text.replace(/\s*\[SSD:[^\]]+\]\s*$/,'').trim();if(!text){alert('SSD Sign: No compose field found.\nTap the field you are composing in, then try again.');return;}window.open(PWA_URL+'/sign.html?action=sign&context=bookmarklet&text='+encodeURIComponent(text),'_blank');})();
 //
 // ── Readable source ────────────────────────────────────────────────────────
 
 javascript: (function () {
   // Replace with your SSD PWA address.
-  var PWA_URL = 'http://localhost:8080';
+  var PWA_URL = 'https://idltd.github.io/SignedSealedDelivered';
 
   function isEditable(el) {
     if (!el) return false;
