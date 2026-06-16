@@ -7,7 +7,7 @@
       "id": "ssd@idltd.com"
     }
   },
-  "permissions": ["storage", "tabs"],
+  "permissions": ["storage", "tabs", "contextMenus"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://m.facebook.com/*",

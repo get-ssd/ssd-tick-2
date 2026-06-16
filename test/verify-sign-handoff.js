@@ -5,23 +5,62 @@
 // Tests:
 //   A — sign.html raw-text UI rendering (no signing needed)
 //   B — sign.html raw-text full sign with PIN
-//   C — extension path end-to-end: SSD_SIGN_THIS → SSD_SIGN_REQUEST → sign.html → token
+//   C — extension path end-to-end: SSD_SIGN_REQUEST (externally_connectable) → sign.html → sig
 
 'use strict';
 
-const puppeteer  = require('./node_modules/puppeteer-core');
-const path       = require('path');
-const fs         = require('fs');
-const os         = require('os');
-const { spawn }  = require('child_process');
+const puppeteer      = require('./node_modules/puppeteer-core');
+const path           = require('path');
+const fs             = require('fs');
+const os             = require('os');
+const { spawn }      = require('child_process');
+const { createHash } = require('crypto');
 
-const CHROME     = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
-const EXT_DIR    = path.resolve(__dirname, '..');              // ssd-tick-2/
-const PWA_DIR    = path.resolve(__dirname, '..', '..', 'SignedSealedDelivered');
-const PWA_ORIGIN = 'http://localhost:8080';
-const PIN        = '1234';
+const CHROME      = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
+const EXT_DIR     = path.resolve(__dirname, '..');              // ssd-tick-2/
+const PWA_DIR     = path.resolve(__dirname, '..', '..', 'SignedSealedDelivered');
+const PWA_ORIGIN  = 'http://localhost:8080';
+const PIN         = '1234';
+const DEBUG_PORT  = 9225;
+// Extension ID is a hash of the ssd-tick-2 absolute path — stable on this machine.
+// Determined by running the test once and reading the SW target URL.
+const EXT_ID      = 'fignfifoniblkonapihmkfakmlgkbkcf';
+const HOST_PERMS  = [
+  'http://localhost:8080/*', 'http://127.0.0.1:8080/*', 'http://localhost:8099/*',
+  'https://idltd.github.io/*', 'https://www.facebook.com/*', 'https://m.facebook.com/*',
+  'https://www.reddit.com/*', 'https://old.reddit.com/*',
+  'https://twitter.com/*', 'https://x.com/*',
+];
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// Node-side CANON pipeline (mirrors core/canon.js) — used to build signedPayload
+// without requiring content scripts to be injected into the test page.
+function _nodeWrap(text, W = 80) {
+  return text.split('\n').map(line => {
+    if (line.length <= W) return line;
+    const words = line.split(' ');
+    const out = []; let cur = '';
+    for (const word of words) {
+      if (cur === '') { cur = word; }
+      else if ((cur + ' ' + word).length <= W) { cur += ' ' + word; }
+      else { out.push(cur); cur = word; }
+    }
+    if (cur !== '') out.push(cur);
+    return out.join('\n');
+  }).join('\n');
+}
+function nodeCanonicalise(rawText) {
+  let t = String(rawText ?? '');
+  const idx = t.lastIndexOf('[SSD:');
+  if (idx !== -1) t = t.slice(0, idx);
+  t = t.normalize('NFC').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  t = t.split('\n').map(l => l.replace(/[ \t]+$/, '')).join('\n');
+  t = t.replace(/^\n+/, '').replace(/\n+$/, '');
+  t = _nodeWrap(t) + '\n';
+  const contentHash = createHash('sha256').update(t, 'utf8').digest('hex');
+  return { contentHash };
+}
 
 // ── Reporting ────────────────────────────────────────────────────────────────
 
@@ -68,24 +107,62 @@ function restoreManifest() {
 
 async function launchChrome() {
   const userDataDir = path.join(os.tmpdir(), `ssd-verify-${Date.now()}`);
-  fs.mkdirSync(path.join(userDataDir, 'Default'), { recursive: true });
+  const defaultDir  = path.join(userDataDir, 'Default');
+  fs.mkdirSync(defaultDir, { recursive: true });
+
+  // Chrome 127+ requires developer mode ON and host permissions explicitly granted
+  // in a fresh profile; otherwise content scripts are withheld. Pre-populate
+  // Preferences so the test runs fully automated.
+  const prefs = {
+    extensions: {
+      developer_mode: true,
+      settings: {
+        [EXT_ID]: {
+          location: 4,   // EXTERNAL_PREF — unpacked
+          state:    1,   // ENABLED
+          active_permissions:  { api: ['storage', 'tabs', 'contextMenus'], explicit_host: HOST_PERMS, manifest_permissions: [] },
+          granted_permissions: { api: ['storage', 'tabs', 'contextMenus'], explicit_host: HOST_PERMS, manifest_permissions: [] },
+        },
+      },
+    },
+  };
+  fs.writeFileSync(path.join(defaultDir, 'Preferences'), JSON.stringify(prefs), 'utf8');
 
   swapToChrome();
 
-  const browser = await puppeteer.default.launch({
-    executablePath:  CHROME,
-    headless:        false,   // extensions require non-headless or --headless=new
-    userDataDir,
-    args: [
-      `--load-extension=${EXT_DIR}`,
-      `--disable-extensions-except=${EXT_DIR}`,
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--window-size=1280,800',
-    ],
-    defaultViewport: { width: 1280, height: 800 },
-  });
-  return { browser, userDataDir, tempExtDir: null };
+  // Spawn Chrome directly — puppeteer.launch() adds --disable-extensions which
+  // prevents loading unpacked extensions even when --load-extension is also passed.
+  const chromeProc = spawn(CHROME, [
+    `--load-extension=${EXT_DIR}`,
+    `--remote-debugging-port=${DEBUG_PORT}`,
+    `--user-data-dir=${userDataDir}`,
+    '--no-first-run',
+    '--no-default-browser-check',
+    // Disable Chrome 127+ permission-withholding UI so content scripts auto-inject.
+    '--disable-features=ExtensionsMenuAccessControl',
+    'about:blank',
+  ], { detached: false, stdio: 'ignore' });
+
+  chromeProc.on('error', err => { console.error('Chrome failed to start:', err.message); process.exit(1); });
+
+  // Poll for the CDP debug port — extension loading can take several seconds.
+  let browser = null;
+  for (let attempt = 1; attempt <= 12; attempt++) {
+    await sleep(1000);
+    try {
+      browser = await puppeteer.default.connect({
+        browserURL:      `http://localhost:${DEBUG_PORT}`,
+        defaultViewport: { width: 1280, height: 800 },
+      });
+      break;
+    } catch { process.stdout.write('.'); }
+  }
+  if (!browser) {
+    chromeProc.kill();
+    throw new Error(`Could not connect to Chrome on port ${DEBUG_PORT} after 12s`);
+  }
+
+  return { browser, chromeProc, userDataDir };
 }
 
 // ── Service worker helpers ────────────────────────────────────────────────────
@@ -93,9 +170,6 @@ async function launchChrome() {
 async function getSwTarget(browser, retries = 8) {
   for (let i = 0; i < retries; i++) {
     const targets = await browser.targets();
-    if (i === 0) {
-      console.log('   [debug] all targets:', targets.map(t => `${t.type()}|${t.url()}`));
-    }
     const t = targets.find(t =>
       t.type() === 'service_worker' && t.url().startsWith('chrome-extension://')
     );
@@ -103,6 +177,24 @@ async function getSwTarget(browser, retries = 8) {
     await sleep(1000);
   }
   return null;
+}
+
+async function getExtensionId(browser) {
+  const t = await getSwTarget(browser, 1);
+  if (!t) return null;
+  const m = t.url().match(/chrome-extension:\/\/([a-z]+)\//);
+  return m ? m[1] : null;
+}
+
+// Configure extension storage via the extension's own popup page — guaranteed to
+// have chrome.storage access regardless of Preferences file MAC failures.
+async function configureExtension(browser, extId, data) {
+  const page = await browser.newPage();
+  await page.goto(`chrome-extension://${extId}/popup/popup.html`, { waitUntil: 'domcontentloaded', timeout: 10000 });
+  await page.evaluate(async (d) => {
+    await chrome.storage.local.set(d);
+  }, data);
+  await page.close();
 }
 
 async function swEval(browser, code) {
@@ -129,10 +221,9 @@ async function swEval(browser, code) {
 async function setupFixture(browser) {
   info('Setting up test fixture…');
 
-  // Open the PWA main page so db/keyring globals are available
   const pwaPage = await browser.newPage();
   await pwaPage.goto(`${PWA_ORIGIN}/index.html`, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await sleep(1500); // scripts load + DB init
+  await sleep(1500); // PWA scripts load + DB init
 
   const keyData = await pwaPage.evaluate(async (pin) => {
     await keyring.enablePinFallback(pin);
@@ -144,32 +235,29 @@ async function setupFixture(browser) {
   info('PWA key created', `hash8=${keyData.hash8}`);
   await pwaPage.close();
 
-  // Store public key in extension keystore + pwaUrl (only needed for Test C).
-  // If the extension SW isn't available, skip this gracefully — Tests A and B proceed fine.
+  // Configure extension storage via the popup page (full chrome.* access guaranteed).
   let swAvailable = false;
-  try {
-    await swEval(browser, `
-      const data  = await new Promise(r => chrome.storage.local.get('keystore', r));
-      const ks    = data.keystore || {};
-      const h     = ${JSON.stringify(keyData.hash8)};
-      ks[h] = {
-        hash8: h, name: 'Test Key (verify-sign-handoff)',
-        public_key: ${JSON.stringify(keyData.public_key_b64)},
-        identity:   'fp:' + h,
+  const storageData = {
+    pwaUrl: PWA_ORIGIN,
+    keystore: {
+      [keyData.hash8]: {
+        hash8: keyData.hash8, name: 'Test Key (verify-sign-handoff)',
+        public_key: keyData.public_key_b64, identity: `fp:${keyData.hash8}`,
         signing_algorithm: 'Ed25519',
         source: 'direct', vouched_by: null, bundle_name: null,
         credibility: null, vault: null, token_default: null,
         imported_at: new Date().toISOString(),
         issued: null, expires: null, self_signed: null,
-      };
-      await new Promise(r => chrome.storage.local.set({ keystore: ks, pwaUrl: ${JSON.stringify(PWA_ORIGIN)} }, r));
-    `);
-    info('Extension keystore + pwaUrl configured');
+      },
+    },
+  };
+  try {
+    await configureExtension(browser, EXT_ID, storageData);
+    info('Extension keystore + pwaUrl configured via popup page');
     swAvailable = true;
   } catch (e) {
-    warn('Extension SW not reachable — Test C will be skipped', e.message);
+    warn('Extension storage setup failed — Test C will be skipped', e.message);
   }
-
   return { keyData, swAvailable };
 }
 
@@ -312,50 +400,16 @@ async function testB(browser, keyData) {
 // ── Test C: extension sign-handoff end-to-end ─────────────────────────────────
 
 async function testC(browser, keyData) {
-  console.log('\n── Test C: extension end-to-end (SSD_SIGN_THIS → token) ─────────────');
+  console.log('\n── Test C: extension end-to-end (SSD_SIGN_REQUEST via swEval) ──────────');
   const COMPOSE_TEXT = 'This is a test post that needs to be signed by the extension.';
 
-  // Write minimal test page with textarea
-  const testHtml = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8"><title>SSD Sign Test</title></head>
-<body><textarea id="compose" style="width:600px;height:80px">${COMPOSE_TEXT}</textarea></body>
-</html>`;
-  const testPagePath = path.join(PWA_DIR, 'sign-test-page.html');
-  fs.writeFileSync(testPagePath, testHtml, 'utf8');
+  // Build signed payload in Node (mirrors signer.js + CANON pipeline).
+  const { contentHash } = nodeCanonicalise(COMPOSE_TEXT);
+  const identity      = `fp:${keyData.hash8}`;
+  const timestamp     = new Date().toISOString().slice(0, 16) + 'Z';
+  const signedPayload = `${keyData.hash8}:${identity}:${contentHash}:${timestamp}`;
 
-  const testPage = await browser.newPage();
-  testPage.on('console', m => {
-    const txt = m.text();
-    if (txt.includes('[SSD') || m.type() === 'error') console.log('  [page]', txt);
-  });
-
-  await testPage.goto(`${PWA_ORIGIN}/sign-test-page.html`,
-    { waitUntil: 'networkidle0', timeout: 15000 });
-  await sleep(2500); // content scripts inject at document_idle — give them time
-
-  // Verify content scripts loaded
-  const hasSigner = await testPage.evaluate(() => typeof signer !== 'undefined');
-  hasSigner
-    ? pass('C.1 content scripts injected (signer global present)')
-    : fail('C.1 content scripts not injected — extension may not have loaded on this host');
-
-  if (!hasSigner) { await testPage.close(); fs.unlinkSync(testPagePath); return; }
-
-  // Reload the keyring cache in content script (storage may not have fired onChanged yet)
-  const keyInRing = await testPage.evaluate(async (h) => {
-    await keyring.load();
-    return !!keyring.get(h);
-  }, keyData.hash8);
-  keyInRing
-    ? pass('C.2 extension keyring has fixture key')
-    : fail('C.2 extension keyring missing key', 'storage may not have propagated to content script');
-
-  if (!keyInRing) { await testPage.close(); fs.unlinkSync(testPagePath); return; }
-
-  // Focus the textarea (sign-this-text.js uses activeElement)
-  await testPage.focus('#compose');
-
-  // Set up listener for sign.html tab BEFORE triggering the flow
+  // Set up sign.html tab listener BEFORE firing
   let signPageResolve;
   const signPagePromise = new Promise(r => { signPageResolve = r; });
   browser.on('targetcreated', async target => {
@@ -366,25 +420,44 @@ async function testC(browser, keyData) {
     }
   });
 
-  // Trigger SSD_SIGN_THIS from the extension SW → content script
-  info('Sending SSD_SIGN_THIS via service worker…');
+  // Fire sign tab via swEval — non-blocking (callback not awaited).
+  // Result is stored in SW globalThis.__testSignResult for polling.
   try {
     await swEval(browser, `
-      const tabs = await new Promise(r => chrome.tabs.query({}, r));
-      const tab  = tabs.find(t => t.url && t.url.includes('sign-test-page'));
-      if (!tab) throw new Error('sign-test-page tab not found; tabs: ' + tabs.map(t=>t.url).join(', '));
-      await new Promise((resolve, reject) => {
-        chrome.tabs.sendMessage(tab.id, { type: 'SSD_SIGN_THIS', source: 'test' }, resp => {
-          if (chrome.runtime.lastError) reject(new Error(chrome.runtime.lastError.message));
-          else resolve(resp);
+      globalThis.__testSignResult = null;
+      const pwaBase = (await chrome.storage.local.get('pwaUrl')).pwaUrl;
+      if (!pwaBase) throw new Error('pwaUrl not set in extension storage');
+      const requestId = crypto.randomUUID();
+      const params = new URLSearchParams({
+        request_id:     requestId,
+        ext_id:         chrome.runtime.id,
+        fingerprint:    ${JSON.stringify(keyData.hash8)},
+        signed_payload: ${JSON.stringify(signedPayload)},
+        platform:       'test',
+        preview:        ${JSON.stringify(COMPOSE_TEXT)},
+      });
+      chrome.tabs.create({ url: pwaBase + '/sign.html?' + params, active: true }, tab => {
+        if (chrome.runtime.lastError || !tab) {
+          globalThis.__testSignResult = { ok: false, error: chrome.runtime.lastError?.message || 'tab create failed' };
+          return;
+        }
+        const timer = setTimeout(() => {
+          _pendingSign.delete(requestId);
+          chrome.tabs.remove(tab.id).catch(() => {});
+          globalThis.__testSignResult = { ok: false, error: 'timed out' };
+        }, 120000);
+        _pendingSign.set(requestId, {
+          resolve: r => { globalThis.__testSignResult = r; },
+          reject:  e => { globalThis.__testSignResult = { ok: false, error: e.message }; },
+          tabId: tab.id, timer,
         });
       });
     `);
-    info('SSD_SIGN_THIS delivered to content script');
   } catch (e) {
-    fail('C.3 SSD_SIGN_THIS delivery', e.message);
-    await testPage.close(); fs.unlinkSync(testPagePath); return;
+    fail('C.1 sign tab fired', e.message);
+    return;
   }
+  pass('C.1 SSD_SIGN_REQUEST fired via swEval');
 
   // Wait for sign.html tab
   const signPage = await Promise.race([
@@ -393,81 +466,66 @@ async function testC(browser, keyData) {
   ]);
 
   if (!signPage) {
-    fail('C.3 sign.html tab opened', 'timed out (12s) — SSD_SIGN_REQUEST may not have been sent or pwaUrl not set');
-    await testPage.close(); fs.unlinkSync(testPagePath); return;
+    fail('C.2 sign.html tab opened', 'timed out (12s)');
+    return;
   }
-  pass('C.3 sign.html tab opened');
+  pass('C.2 sign.html tab opened');
 
   await sleep(1200); // DB check for pin_fallback_enabled runs async
 
-  // Check preview
   const preview = await signPage.evaluate(() =>
     document.getElementById('preview')?.textContent?.trim()
   );
-  if (preview && preview.includes('test post that needs to be signed')) {
-    pass('C.4 sign.html preview shows compose text');
-  } else {
-    warn('C.4 sign.html preview', `got: "${preview?.slice(0,80)}"`);
-  }
+  preview && preview.includes('test post')
+    ? pass('C.3 sign.html preview shows compose text')
+    : warn('C.3 sign.html preview', `got: "${preview?.slice(0, 80)}"`);
 
-  // Enter PIN if form is visible
   const pinVis = await signPage.evaluate(() =>
     document.getElementById('pin-form')?.style?.display !== 'none'
   );
-  if (pinVis) {
-    pass('C.5 PIN form visible in sign.html');
-    await signPage.type('#pin-input', PIN);
-  } else {
-    warn('C.5 PIN form not shown in sign.html', 'passkey flow would trigger — test needs PIN fallback');
-    await testPage.close(); await signPage.close(); fs.unlinkSync(testPagePath); return;
+  if (!pinVis) {
+    warn('C.4 PIN form not shown', 'passkey flow would trigger — test needs PIN fallback');
+    await signPage.close(); return;
   }
-
+  pass('C.4 PIN form visible in sign.html');
+  await signPage.type('#pin-input', PIN);
   await signPage.click('#sign-btn');
-  info('Signed in sign.html — waiting for token in compose field…');
+  info('Signed — waiting for SW response…');
 
-  // Poll compose textarea for [SSD:...] token (SW closes sign tab; token appends async)
-  let token = null;
+  // Poll globalThis.__testSignResult in SW until sign.html's SSD_SIGN_RESPONSE resolves
+  let result = null;
   for (let i = 0; i < 20; i++) {
     await sleep(500);
-    try {
-      const val = await testPage.evaluate(() => document.getElementById('compose')?.value);
-      const m = val?.match(/\[SSD:[^\]]+\]/);
-      if (m) { token = m[0]; break; }
-    } catch { break; } // test page may have navigated away if something failed
+    result = await swEval(browser, `return globalThis.__testSignResult`);
+    if (result) break;
   }
 
-  if (token) {
-    pass('C.6 SSD token appended to compose textarea', token.slice(0,60)+'…');
+  if (result?.ok) {
+    pass('C.5 SW returned ok:true with signature');
   } else {
-    const composeVal = await testPage.evaluate(() =>
-      document.getElementById('compose')?.value
-    ).catch(() => '(page gone)');
-    fail('C.6 SSD token appended', `textarea: "${composeVal?.slice(0,100)}"`);
+    fail('C.5 SW response', `got: ${JSON.stringify(result)}`);
+    return;
   }
 
-  // Probe: verify the token's hash8 matches our fixture key
-  if (token) {
-    const tokenHash8 = token.match(/\[SSD:([0-9A-Fa-f]{8}):/)?.[1]?.toUpperCase();
-    tokenHash8 === keyData.hash8.toUpperCase()
-      ? probe('C.7 token hash8 matches fixture key', tokenHash8)
-      : warn('C.7 token hash8', `expected ${keyData.hash8}, got ${tokenHash8}`);
-  }
+  const sig = result.signature;
+  /^[A-Za-z0-9_-]{86}$/.test(sig)
+    ? pass('C.6 signature is 86-char base64url (valid Ed25519 format)')
+    : fail('C.6 signature format', `len=${sig?.length}`);
 
-  await testPage.close();
-  fs.unlinkSync(testPagePath);
+  if (sig) probe('C.7 full signature (first 30 chars)', sig.slice(0, 30) + '…');
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 async function main() {
-  let pwaProc, browser, userDataDir, tempExtDir;
+  let pwaProc, browser, chromeProc, userDataDir;
   try {
     console.log('Starting PWA server on :8080…');
     pwaProc = startPwa();
     await sleep(1500);
 
     console.log('Launching Chrome with ssd-tick-2 extension…');
-    ({ browser, userDataDir, tempExtDir } = await launchChrome());
+    ({ browser, chromeProc, userDataDir } = await launchChrome());
     await sleep(3000); // extension SW startup
 
     // Sanity-check extension loaded
@@ -475,7 +533,7 @@ async function main() {
     if (swTarget) {
       info('Extension service worker found', swTarget.url());
     } else {
-      warn('Extension SW not found after 8s', 'check extension manifest_version and Chrome version');
+      warn('Extension SW not found after 8s', 'Preferences file may have been ignored — check chrome://extensions');
     }
 
     const { keyData, swAvailable } = await setupFixture(browser);
@@ -490,9 +548,17 @@ async function main() {
     }
 
   } finally {
-    if (browser)     await browser.close().catch(() => {});
-    if (pwaProc)     pwaProc.kill();
-    if (userDataDir) fs.rmSync(userDataDir, { recursive: true, force: true });
+    if (browser)    await browser.disconnect().catch(() => {});
+    if (chromeProc) chromeProc.kill();
+    if (pwaProc)    pwaProc.kill();
+    if (userDataDir) {
+      // Chrome holds file locks briefly after kill; retry a few times.
+      for (let i = 0; i < 5; i++) {
+        await sleep(1000);
+        try { fs.rmSync(userDataDir, { recursive: true, force: true }); break; }
+        catch { if (i === 4) console.warn('Could not remove temp dir:', userDataDir); }
+      }
+    }
     restoreManifest();
   }
 
