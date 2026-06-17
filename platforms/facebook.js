@@ -53,12 +53,34 @@ const facebook = {
   injectIndicator(anchorNode, badgeElement) {
     const container = anchorNode.parentElement || anchorNode.parentNode;
     if (!container) { console.debug('[SSD:inject] no container'); return null; }
+
+    // On m.facebook.com, post content is wrapped in role="button" elements
+    // wired to FB's action-dispatch system.  Any tap inside them is intercepted
+    // before extension event handlers can respond.  Inject AFTER the button as
+    // a sibling — the outer container (83px) leaves ~29px below the button
+    // (50px), enough for the badge (~16px).  Outside the button = no interception.
+    let roleBtn = null;
+    let el = container;
+    while (el && el !== document.body) {
+      if (el.getAttribute && el.getAttribute('role') === 'button') { roleBtn = el; break; }
+      el = el.parentElement;
+    }
+
+    if (roleBtn) {
+      const existingSibling = roleBtn.nextElementSibling?.querySelector?.('.ssd-indicator');
+      if (existingSibling) { console.debug('[SSD:inject] returning existing sibling badge'); return existingSibling; }
+      const wrap = document.createElement('div');
+      wrap.className = 'ssd-badge-wrap';
+      wrap.appendChild(badgeElement);
+      roleBtn.insertAdjacentElement('afterend', wrap);
+      console.debug('[SSD:inject] badge injected after role=button');
+      return badgeElement;
+    }
+
+    // Fallback for desktop FB (no role=button ancestor): inject inline.
+    // Apply translateX if the badge overflows the right viewport edge.
     const existing = container.querySelector && container.querySelector('.ssd-indicator');
-    if (existing) { console.debug('[SSD:inject] returning existing badge'); return existing; }
-    // Append inline — FB msite assigns fixed pixel heights to every container,
-    // so block/sibling injection is always clipped.  Inline flows after the
-    // token text and is visible.  If it overflows the right viewport edge we
-    // correct with a translateX after layout.
+    if (existing) { console.debug('[SSD:inject] returning existing inline badge'); return existing; }
     container.appendChild(badgeElement);
     requestAnimationFrame(() => {
       const rect = badgeElement.getBoundingClientRect();
@@ -67,7 +89,7 @@ const facebook = {
         badgeElement.style.transform = `translateX(-${shift}px)`;
       }
     });
-    console.debug('[SSD:inject] badge injected into', container.nodeName);
+    console.debug('[SSD:inject] badge injected inline');
     return badgeElement;
   },
 
