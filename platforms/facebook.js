@@ -55,11 +55,18 @@ const facebook = {
     if (!container) { console.debug('[SSD:inject] no container'); return null; }
     const existing = container.querySelector && container.querySelector('.ssd-indicator');
     if (existing) { console.debug('[SSD:inject] returning existing badge'); return existing; }
-    // Wrap in a block div so the badge breaks to its own line and doesn't
-    // overflow the post container horizontally in portrait on mobile.
-    const wrap = document.createElement('div');
-    wrap.appendChild(badgeElement);
-    container.appendChild(wrap);
+    // Append inline — FB msite assigns fixed pixel heights to every container,
+    // so block/sibling injection is always clipped.  Inline flows after the
+    // token text and is visible.  If it overflows the right viewport edge we
+    // correct with a translateX after layout.
+    container.appendChild(badgeElement);
+    requestAnimationFrame(() => {
+      const rect = badgeElement.getBoundingClientRect();
+      if (rect.right > window.innerWidth - 4) {
+        const shift = Math.round(rect.right - (window.innerWidth - 4));
+        badgeElement.style.transform = `translateX(-${shift}px)`;
+      }
+    });
     console.debug('[SSD:inject] badge injected into', container.nodeName);
     return badgeElement;
   },
