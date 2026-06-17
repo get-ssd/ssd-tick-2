@@ -204,6 +204,8 @@ The `.devmode` file in the root enables the in-page sign button on localhost. Re
 ## Related
 
 - **SSD PWA** (`../SignedSealedDelivered/`) — author-side app: key generation, passkey-protected signing, document sealing
+- **SSD Render Service** (`../ssd.render-service/`) — renders `.ssd` bundles to PDF/A-2b
+- **SSD Vault** (`../ssd.vault/`) — browser app for browsing and managing `.ssd` artifact collections (early stage)
 - **SSD Direct** (`../sign-direct.js`) — Node.js CLI for signing posts and exporting key cards without the PWA
 - **CANON-Spec** (`../docs/CANON-Spec-v0_1.md`) — the canonicalisation algorithm shared between signer and verifier
 - **Tick Transfer Protocol** (`../docs/tick-transfer-protocol.md`) — how key cards move from the PWA into the extension
