@@ -77,22 +77,25 @@ const badge = {
   },
 };
 
-// Document-level capture intercept so FB's React event delegation (which
-// registers capture-phase listeners at the root container) doesn't swallow
-// taps on SSD badges before our element handlers get a chance to fire.
+// Window-level capture intercept for badge taps.
+// Registered on `window` (not `document`) because capture phase fires
+// window → document → … in positional order, so our handler runs before
+// any document-level handler the page registered — regardless of when
+// the page scripts ran relative to this content script.
 if (!window._ssdBadgeTouchGuard) {
   window._ssdBadgeTouchGuard = true;
   const _ssdTouchIntercept = (e) => {
     const target = e.target.closest && e.target.closest('.ssd-indicator');
     if (!target) return;
     e.stopPropagation();
+    e.stopImmediatePropagation();
     e.preventDefault();
     if (e.type === 'touchend' && typeof verificationPopup !== 'undefined') {
       verificationPopup.show(target, target._ssdResult);
     }
   };
-  document.addEventListener('touchstart', _ssdTouchIntercept, { capture: true, passive: false });
-  document.addEventListener('touchend',   _ssdTouchIntercept, { capture: true, passive: false });
+  window.addEventListener('touchstart', _ssdTouchIntercept, { capture: true, passive: false });
+  window.addEventListener('touchend',   _ssdTouchIntercept, { capture: true, passive: false });
 }
 
 if (typeof module !== 'undefined' && module.exports) module.exports = badge;
