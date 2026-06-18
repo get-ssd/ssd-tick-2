@@ -5,7 +5,7 @@ Browser extension that detects and verifies SSD-signed posts on social media. Wh
 - **Firefox** (all platforms, including Firefox for Android) — primary delivery target
 - **Chrome** (desktop only — Chrome for Android does not support extensions)
 
-Current version: **0.4.0**
+Current version: **0.4.2**
 
 ---
 
@@ -57,37 +57,6 @@ manifest-chrome.json → manifest.json
 ```
 
 Then load unpacked from `ssd-tick-2/` via `chrome://extensions` → Developer mode → Load unpacked. Restore the names afterwards.
-
----
-
-## Sign this text
-
-**Sign on demand** — a one-gesture way to sign the post you are currently composing. Three surfaces, same intent:
-
-| Surface | How to use |
-|---|---|
-| **Bookmarklet** (primary — any mobile browser) | Tap the bookmarklet while the compose field is focused |
-| **Firefox toolbar button** (mobile extension) | Tap the SSD Tick icon → tap **🔏 Sign this text** |
-| **Chrome context menu** (desktop extension) | Right-click inside the compose field → **🔏 Sign this text (SSD)** |
-
-The signed token is appended to the compose field. You can then post as normal.
-
-> **Handoff wiring pending (Gate 2):** Capture and key-selection work on all three surfaces. The SSD PWA signing step (`SSD_SIGN_REQUEST` → background → `sign.html`) is not yet wired — the signing attempt will fail with an error until that path is repaired. See the session report for details.
-
-### Bookmarklet install
-
-1. Open `bookmarklet/sign-ssd.js` and copy the `javascript:` URL (the minified one-liner on the line starting `// javascript:(function(){...`).
-2. Create a new bookmark in your browser. Set the name to **Sign SSD** and paste the `javascript:` URL as the address.
-3. On mobile: add it to your **bookmarks bar** so it is accessible while the keyboard is up. Tap the bookmarklet while the compose field is active. *(Do not invoke via the address bar — typing in the address bar blurs the compose field. Bookmark-bar tap is the intended invocation.)*
-4. To use a deployed SSD PWA instead of localhost, replace `http://localhost:8080` inside the bookmarklet URL with your PWA address.
-
-### Firefox toolbar button (FF Android)
-
-The toolbar button opens the SSD Tick popup. The **🔏 Sign this text** button at the top sends a sign request to the current page. Works on any supported host where a content script is running (Facebook, Twitter/X, Reddit, localhost test page).
-
-### Chrome context menu (desktop)
-
-Right-click inside any editable field on a supported host. The **🔏 Sign this text (SSD)** item reads the **entire field value** — not just the selection. The context menu item appears only when you right-click inside an editable element.
 
 ---
 
@@ -161,15 +130,11 @@ ssd-tick-2/
 ├── background/
 │   ├── service-worker.js       Chrome shell background (service worker)
 │   └── background.js           Firefox shell background (event-page)
-├── bookmarklet/
-│   └── sign-ssd.js             Sign-this-text bookmarklet source + javascript: URL
 ├── core/
 │   ├── canon.js                Canonicalisation (NFC + whitespace rules per CANON-Spec)
 │   ├── keyring.js              Key card storage and lookup (chrome.storage.local)
 │   ├── platforms.js            Platform registry — register(prefix, opts) + resolve()
-│   ├── sign-this-text.js       Sign-this-text content script (capture + handoff entry point)
-│   ├── signer.js               Token construction (used for test signing)
-│   ├── token-parser.js         parseToken() — extracts 5 fields from —SSD·…— string
+│   ├── token-parser.js         parseToken() — extracts 5 fields from [SSD:…] string
 │   ├── vault.js                Key card cache (in-page, backed by keyring)
 │   └── verifier.js             verify() — content8 pre-filter + Ed25519 verify
 ├── platforms/
@@ -179,25 +144,18 @@ ssd-tick-2/
 ├── ui/
 │   ├── badge.js                Badge element factory and state machine
 │   ├── popup.js                In-page verification panel (shown on badge click)
-│   ├── sign-button.js          In-page sign button (author-side, dev mode only)
 │   └── styles.css              Badge and panel styles
 ├── popup/
 │   ├── popup.html              Toolbar popup — key manager UI
 │   └── popup.js                Key import, list, delete
 ├── scanners/
-│   ├── text-scanner.js         DOM text node scanner — finds —SSD·…— inline tokens
+│   ├── text-scanner.js         DOM text node scanner — finds [SSD:…] inline tokens
 │   └── image-scanner.js        QR image scanner stub (not yet implemented)
 └── test/
     ├── bootstrap.js            Localhost test page bootstrap
     ├── e2e.js                  End-to-end tests (sign + verify round-trip)
     └── test-page.html          Test harness page
 ```
-
----
-
-## Dev mode
-
-The `.devmode` file in the root enables the in-page sign button on localhost. Remove it (or leave it empty) in production builds. The sign button is only injected when the extension detects `.devmode` is present — it does not appear on live social platforms.
 
 ---
 

@@ -185,30 +185,6 @@ async function savePwaUrl(raw) {
 document.addEventListener('DOMContentLoaded', async () => {
   renderKeys(await getKeystore());
 
-  // ── Sign this text (FF toolbar action surface) ──────────────────────────────
-  // Sends SSD_SIGN_THIS to the content script on the active tab. The content
-  // script captures document.activeElement and runs the sign flow in the page.
-  const signBtn    = document.getElementById('sign-this-btn');
-  const signStatus = document.getElementById('sign-status');
-
-  signBtn.addEventListener('click', async () => {
-    signBtn.disabled = true;
-    signStatus.textContent = 'Contacting page…';
-    signStatus.className = '';
-    try {
-      const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
-      if (!tab || !tab.id) throw new Error('No active tab');
-      await ext.tabs.sendMessage(tab.id, { type: 'SSD_SIGN_THIS', source: 'toolbar' });
-      signStatus.textContent = '✓ Sign flow started in page';
-      signStatus.className = 'ok';
-      setTimeout(() => window.close(), 800);
-    } catch (err) {
-      signStatus.textContent = `✗ ${err.message || 'Page not supported'}`;
-      signStatus.className = 'error';
-      signBtn.disabled = false;
-    }
-  });
-
   // Populate the URL input from storage on open.
   const stored = await ext.storage.local.get('pwaUrl');
   const urlInput = document.getElementById('pwa-url-input');

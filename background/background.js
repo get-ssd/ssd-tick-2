@@ -126,13 +126,6 @@ async function resolveIdentity(identity) {
   }
 }
 
-// ── PWA URL ──────────────────────────────────────────────────────────────────
-
-async function getPwaUrl() {
-  const data = await ext.storage.local.get('pwaUrl');
-  return data.pwaUrl ? data.pwaUrl.replace(/\/+$/, '') : null;
-}
-
 // ── message handling ─────────────────────────────────────────────────────────
 
 ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
@@ -176,13 +169,6 @@ ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         sendResponse({ ok: false, reason: String(err && err.message || err) });
       }
     })();
-    return true;
-  }
-
-  // SSD_SIGN_REQUEST: full URL-param handoff to PWA not yet wired on Firefox
-  // (externally_connectable absent on FF). TODO: implement URL-param / postMessage path.
-  if (msg && msg.type === 'SSD_SIGN_REQUEST') {
-    sendResponse({ ok: false, error: 'Sign via extension not yet implemented on Firefox' });
     return true;
   }
 

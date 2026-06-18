@@ -53,34 +53,6 @@
   }
   #open-pwa-btn:hover { border-color: var(--primary); background: #c8a96e18; }
 
-  #sign-section {
-    padding: 10px 14px;
-    border-bottom: 1px solid var(--border);
-  }
-  #sign-this-btn {
-    width: 100%;
-    padding: 10px;
-    background: #c8a96e18;
-    border: 1.5px solid var(--primary);
-    border-radius: var(--radius);
-    color: var(--primary);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    letter-spacing: 0.01em;
-  }
-  #sign-this-btn:hover { background: #c8a96e28; }
-  #sign-this-btn:disabled { opacity: 0.5; cursor: default; }
-  #sign-status {
-    margin-top: 6px;
-    font-size: 11px;
-    min-height: 14px;
-    color: var(--text-muted);
-    text-align: center;
-  }
-  #sign-status.ok    { color: var(--success); }
-  #sign-status.error { color: var(--danger); }
-
   #pwa-section {
     border-top: 1px solid var(--border);
     padding: 12px 14px;
@@ -236,11 +208,6 @@
   <span class="brand">SSD Tick</span>
   <span id="key-count">0 keys</span>
   <button id="open-pwa-btn" title="Open SSD to sign a post">Open SSD</button>
-</div>
-
-<div id="sign-section">
-  <button id="sign-this-btn">🔏 Sign this text</button>
-  <div id="sign-status"></div>
 </div>
 
 <div id="key-list"></div>

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
-  "version": "0.4.1",
-  "permissions": ["storage", "tabs", "contextMenus"],
+  "version": "0.4.2",
+  "permissions": ["storage"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://m.facebook.com/*",
@@ -15,13 +15,6 @@
     "http://127.0.0.1:8080/*",
     "http://localhost:8099/*"
   ],
-  "externally_connectable": {
-    "matches": [
-      "http://localhost:8080/*",
-      "http://127.0.0.1:8080/*",
-      "https://idltd.github.io/*"
-    ]
-  },
   "background": {
     "service_worker": "background/service-worker.js"
   },
@@ -35,8 +28,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
@@ -56,8 +47,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
@@ -80,8 +69,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
@@ -104,8 +91,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",

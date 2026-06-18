@@ -114,9 +114,8 @@ const facebook = {
   if (!facebook.hostnames.includes(location.hostname)) return;
 
   // Block-level HTML elements — their boundaries become \n in extracted text,
-  // mirroring what el.innerText (used at signing time in sign-button._readCompose)
-  // produces. Without this, paragraph breaks in Facebook posts are lost and
-  // the content hash never matches what was signed.
+  // mirroring what el.innerText produces. Without this, paragraph breaks in
+  // Facebook posts are lost and the content hash never matches what was signed.
   const BLOCK_TAGS = new Set([
     'ADDRESS','ARTICLE','ASIDE','BLOCKQUOTE','DD','DIV','DL','DT',
     'FIELDSET','FIGCAPTION','FIGURE','FOOTER','FORM',

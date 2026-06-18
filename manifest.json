@@ -1,13 +1,13 @@
 {
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "browser_specific_settings": {
     "gecko": {
       "id": "ssd@idltd.com"
     }
   },
-  "permissions": ["storage", "tabs", "contextMenus"],
+  "permissions": ["storage"],
   "host_permissions": [
     "https://www.facebook.com/*",
     "https://m.facebook.com/*",
@@ -33,8 +33,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
@@ -54,8 +52,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
@@ -78,8 +74,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
@@ -102,8 +96,6 @@
         "core/keyring.js",
         "core/vault.js",
         "core/verifier.js",
-        "core/signer.js",
-        "core/sign-this-text.js",
         "scanners/text-scanner.js",
         "scanners/image-scanner.js",
         "core/platforms.js",
