@@ -20,6 +20,20 @@ function parseKeyBeacon(raw) {
 
 const SSDKEY_PATTERN = /\[SSDKEY:[^\]]+\]/g;
 
+function b64ToBytes(b64) {
+  let s = b64.replace(/-/g, '+').replace(/_/g, '/');
+  while (s.length % 4) s += '=';
+  return Uint8Array.from(atob(s), c => c.charCodeAt(0));
+}
+
+async function verifySelfConsistency(hash8, pubkey) {
+  const bytes = b64ToBytes(pubkey);
+  const buf   = await crypto.subtle.digest('SHA-256', bytes);
+  const hex   = Array.from(new Uint8Array(buf))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+  return hex.slice(0, 8).toUpperCase() === hash8;
+}
+
 const textScanner = {
 
   // Walk the page DOM for [SSD:] content tokens and [SSDKEY:] key beacons.
@@ -141,20 +155,6 @@ const textScanner = {
   //   Called after a successful key import to trigger a re-scan.
   makeBeaconHandler(nameResolver, onImported) {
 
-    function b64ToBytes(b64) {
-      let s = b64.replace(/-/g, '+').replace(/_/g, '/');
-      while (s.length % 4) s += '=';
-      return Uint8Array.from(atob(s), c => c.charCodeAt(0));
-    }
-
-    async function verifySelfConsistency(hash8, pubkey) {
-      const bytes = b64ToBytes(pubkey);
-      const buf   = await crypto.subtle.digest('SHA-256', bytes);
-      const hex   = Array.from(new Uint8Array(buf))
-        .map(b => b.toString(16).padStart(2, '0')).join('');
-      return hex.slice(0, 8).toUpperCase() === hash8;
-    }
-
     async function storeBeaconKey(hash8, pubkey) {
       const { name, identity } = nameResolver(hash8);
       await keyring.put({
@@ -263,4 +263,9 @@ const textScanner = {
   },
 };
 
-if (typeof module !== 'undefined' && module.exports) module.exports = textScanner;
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = textScanner;
+  module.exports.parseKeyBeacon       = parseKeyBeacon;
+  module.exports.SSDKEY_PATTERN       = SSDKEY_PATTERN;
+  module.exports.verifySelfConsistency = verifySelfConsistency;
+}
