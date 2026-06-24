@@ -33,7 +33,7 @@ async function verifyKeyCard(card) {
     Object.fromEntries(Object.keys(data).sort().map(k => [k, data[k]]))
   );
   const pubKey = await crypto.subtle.importKey(
-    'raw', b64ToBytes(card.public_key), { name: 'Ed25519' }, false, ['verify']
+    'raw', b64ToBytes(card.signing_public_key), { name: 'Ed25519' }, false, ['verify']
   );
   return crypto.subtle.verify(
     { name: 'Ed25519' }, pubKey, b64ToBytes(self_signed),
@@ -46,7 +46,7 @@ async function fetchAndVerifyCard(url) {
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const card = await resp.json();
 
-  const required = ['hash8', 'name', 'public_key', 'self_signed', 'signing_algorithm'];
+  const required = ['hash8', 'name', 'signing_public_key', 'self_signed', 'signing_algorithm'];
   const missing = required.filter(f => !card[f]);
   if (missing.length) throw new Error(`Missing fields: ${missing.join(', ')}`);
   if (card.signing_algorithm !== 'Ed25519')
@@ -67,7 +67,7 @@ async function storeFetchedKey(card, source) {
   ks[card.hash8] = {
     hash8:             card.hash8,
     name:              card.name,
-    public_key:        card.public_key,
+    public_key:        card.signing_public_key,
     signing_algorithm: card.signing_algorithm,
     issued:            card.issued || null,
     expires:           card.expires || null,
