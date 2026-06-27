@@ -193,6 +193,20 @@
   }
   #import-btn:hover { opacity: 0.88; }
 
+  #share-import-btn {
+    margin-top: 6px;
+    width: 100%;
+    padding: 7px;
+    background: none;
+    color: var(--primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-weight: 600;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  #share-import-btn:hover { border-color: var(--primary); background: #c8a96e18; }
+
   #message {
     margin-top: 8px;
     font-size: 12px;
@@ -216,6 +230,8 @@
   <div class="section-title">Add key</div>
   <textarea id="key-input" placeholder="Paste key card JSON here…"></textarea>
   <button id="import-btn">Import key card</button>
+  <input id="share-file-input" type="file" accept=".ssd" style="display:none">
+  <button id="share-import-btn" onclick="document.getElementById('share-file-input').click()">Import .ssd key share…</button>
   <div id="message"></div>
 </div>
 

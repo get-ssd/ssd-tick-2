@@ -22,6 +22,98 @@ function b64ToBytes(b64) {
   return Uint8Array.from(atob(s), c => c.charCodeAt(0));
 }
 
+async function _sha256hex(bytes) {
+  const h = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function _hash8(pubB64) {
+  return (await _sha256hex(b64ToBytes(pubB64))).slice(0, 8).toUpperCase();
+}
+
+// Minimal ZIP reader — handles STORE (method 0) and DEFLATE (method 8).
+async function _unzipSSD(bytes) {
+  let eocd = -1;
+  for (let i = bytes.length - 22; i >= 0; i--) {
+    if (bytes[i] === 0x50 && bytes[i+1] === 0x4b && bytes[i+2] === 0x05 && bytes[i+3] === 0x06) {
+      eocd = i; break;
+    }
+  }
+  if (eocd === -1) throw new Error('Not a valid .ssd archive');
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.length);
+  const cdCount  = view.getUint16(eocd + 8, true);
+  const cdOffset = view.getUint32(eocd + 16, true);
+  const files = {};
+  let pos = cdOffset;
+  for (let i = 0; i < cdCount; i++) {
+    if (view.getUint32(pos, true) !== 0x02014b50) throw new Error('Bad central directory');
+    const method   = view.getUint16(pos + 10, true);
+    const compSize = view.getUint32(pos + 20, true);
+    const fnLen    = view.getUint16(pos + 28, true);
+    const extraLen = view.getUint16(pos + 30, true);
+    const cmtLen   = view.getUint16(pos + 32, true);
+    const localOff = view.getUint32(pos + 42, true);
+    const name = new TextDecoder().decode(bytes.slice(pos + 46, pos + 46 + fnLen));
+    pos += 46 + fnLen + extraLen + cmtLen;
+    const lhFnLen    = view.getUint16(localOff + 26, true);
+    const lhExtraLen = view.getUint16(localOff + 28, true);
+    const dataStart  = localOff + 30 + lhFnLen + lhExtraLen;
+    const comp = bytes.slice(dataStart, dataStart + compSize);
+    if (method === 0) {
+      files[name] = comp;
+    } else if (method === 8) {
+      const ds = new DecompressionStream('deflate-raw');
+      const w = ds.writable.getWriter(); const r = ds.readable.getReader();
+      w.write(comp); w.close();
+      const chunks = [];
+      for (;;) { const {done, value} = await r.read(); if (done) break; chunks.push(value); }
+      const out = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+      let off = 0; for (const c of chunks) { out.set(c, off); off += c.length; }
+      files[name] = out;
+    } else {
+      throw new Error(`Unsupported ZIP method ${method}`);
+    }
+  }
+  return files;
+}
+
+// Unpack and self-verify a keyring-share .ssd, return parsed content.
+async function importPublicShare(arrayBuffer) {
+  const bytes = new Uint8Array(arrayBuffer);
+  const files = await _unzipSSD(bytes);
+  for (const f of ['manifest.json', 'signature.json', 'source.json'])
+    if (!files[f]) throw new Error(`Missing ${f} in archive`);
+
+  const dec = new TextDecoder();
+  const manifestRaw  = files['manifest.json'];
+  const signatureRaw = files['signature.json'];
+  const sourceRaw    = files['source.json'];
+  const manifest  = JSON.parse(dec.decode(manifestRaw));
+  const signature = JSON.parse(dec.decode(signatureRaw));
+  const content   = JSON.parse(dec.decode(sourceRaw));
+
+  if (content.type !== 'keyring-share') throw new Error('Not a public key share');
+
+  // Content hash
+  const sourceHash = 'sha256:' + await _sha256hex(sourceRaw);
+  if (sourceHash !== manifest.files?.['source.json']) throw new Error('Content hash mismatch — file may be tampered');
+
+  // Manifest hash
+  const manifestHash = 'sha256:' + await _sha256hex(manifestRaw);
+  if (manifestHash !== signature.manifest_hash) throw new Error('Manifest hash mismatch');
+
+  // Self-signed: signer must be the embedded O: key
+  if (signature.signer_hash8 !== await _hash8(content.signing_pub_b64))
+    throw new Error('Share is not self-signed — re-export from a current SSD version');
+
+  // Ed25519 verify
+  const pubKey = await crypto.subtle.importKey('raw', b64ToBytes(content.signing_pub_b64), {name: 'Ed25519'}, false, ['verify']);
+  const valid = await crypto.subtle.verify({name: 'Ed25519'}, pubKey, b64ToBytes(signature.signature), manifestRaw);
+  if (!valid) throw new Error('Signature invalid');
+
+  return content;
+}
+
 // Validate the key-card self-signature — identical scheme to the existing
 // ssd-tick popup.js: self_signed covers all other fields, keys sorted
 // alphabetically, canonical JSON, Ed25519 over the UTF-8 bytes.
@@ -224,6 +316,43 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('key-input').value = '';
       showMessage(`Imported ${fp}`, false);
       renderKeys(await getKeystore());
+    } catch (e) {
+      showMessage(e.message, true);
+    }
+  });
+
+  document.getElementById('share-file-input').addEventListener('change', async function() {
+    const file = this.files[0];
+    if (!file) return;
+    this.value = '';
+    try {
+      const content = await importPublicShare(await file.arrayBuffer());
+      const ks = await getKeystore();
+      let added = 0, skipped = 0;
+      const now = new Date().toISOString();
+
+      const mergeKey = (hash8, pubB64, name) => {
+        if (ks[hash8]) { skipped++; return; }
+        ks[hash8] = {
+          hash8, name: name || hash8,
+          public_key: pubB64,
+          signing_algorithm: 'Ed25519',
+          issued: null, expires: null, self_signed: null,
+          imported_at: now, source: 'direct',
+          vouched_by: null, bundle_name: null,
+          credibility: null, vault: null, token_default: null,
+        };
+        added++;
+      };
+
+      mergeKey(content.hash8, content.signing_pub_b64, content.key_name);
+      for (const c of (content.contacts ?? [])) {
+        if (c.hash8 && c.public_key_b64) mergeKey(c.hash8, c.public_key_b64, c.name ?? c.hash8);
+      }
+
+      await saveKeystore(ks);
+      showMessage(`Share imported: ${added} new, ${skipped} already known`, false);
+      renderKeys(ks);
     } catch (e) {
       showMessage(e.message, true);
     }
