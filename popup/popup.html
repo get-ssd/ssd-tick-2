@@ -193,7 +193,8 @@
   }
   #import-btn:hover { opacity: 0.88; }
 
-  #share-import-btn {
+  #share-import-btn,
+  #share-export-btn {
     margin-top: 6px;
     width: 100%;
     padding: 7px;
@@ -205,7 +206,8 @@
     font-size: 12px;
     cursor: pointer;
   }
-  #share-import-btn:hover { border-color: var(--primary); background: #c8a96e18; }
+  #share-import-btn:hover,
+  #share-export-btn:hover { border-color: var(--primary); background: #c8a96e18; }
 
   #message {
     margin-top: 8px;
@@ -232,6 +234,7 @@
   <button id="import-btn">Import key card</button>
   <input id="share-file-input" type="file" accept=".ssd" style="display:none">
   <button id="share-import-btn" onclick="document.getElementById('share-file-input').click()">Import .ssd key share…</button>
+  <button id="share-export-btn">Export keys as .ssd share…</button>
   <div id="message"></div>
 </div>
 

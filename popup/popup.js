@@ -31,6 +31,139 @@ async function _hash8(pubB64) {
   return (await _sha256hex(b64ToBytes(pubB64))).slice(0, 8).toUpperCase();
 }
 
+// CRC-32 table for STORE-method ZIP writing.
+const _CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[i] = c;
+  }
+  return t;
+})();
+
+function _crc32(data) {
+  let crc = 0xFFFFFFFF;
+  for (const b of data) crc = _CRC_TABLE[(crc ^ b) & 0xFF] ^ (crc >>> 8);
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
+
+// Minimal ZIP writer — STORE method (method 0), no compression.
+function _zipSSD(files) {
+  const enc = new TextEncoder();
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const [name, data] of Object.entries(files)) {
+    const nameBytes = enc.encode(name);
+    const crc = _crc32(data);
+
+    const lh = new Uint8Array(30 + nameBytes.length);
+    const lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true);
+    lv.setUint16(4, 20, true);
+    lv.setUint16(6, 0, true);
+    lv.setUint16(8, 0, true);
+    lv.setUint16(10, 0, true);
+    lv.setUint16(12, 0, true);
+    lv.setUint32(14, crc, true);
+    lv.setUint32(18, data.length, true);
+    lv.setUint32(22, data.length, true);
+    lv.setUint16(26, nameBytes.length, true);
+    lv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+
+    const cd = new Uint8Array(46 + nameBytes.length);
+    const cv = new DataView(cd.buffer);
+    cv.setUint32(0, 0x02014b50, true);
+    cv.setUint16(4, 20, true);
+    cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true);
+    cv.setUint16(10, 0, true);
+    cv.setUint16(12, 0, true);
+    cv.setUint16(14, 0, true);
+    cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true);
+    cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true);
+    cv.setUint16(30, 0, true);
+    cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true);
+    cv.setUint16(36, 0, true);
+    cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    cd.set(nameBytes, 46);
+
+    localParts.push(lh, data);
+    centralParts.push(cd);
+    offset += lh.length + data.length;
+  }
+
+  const cdOffset = offset;
+  const cdSize = centralParts.reduce((s, b) => s + b.length, 0);
+  const count = Object.keys(files).length;
+  const eocd = new Uint8Array(22);
+  const ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true);
+  ev.setUint16(4, 0, true);
+  ev.setUint16(6, 0, true);
+  ev.setUint16(8, count, true);
+  ev.setUint16(10, count, true);
+  ev.setUint32(12, cdSize, true);
+  ev.setUint32(16, cdOffset, true);
+  ev.setUint16(20, 0, true);
+
+  const all = [...localParts, ...centralParts, eocd];
+  const total = all.reduce((s, b) => s + b.length, 0);
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const b of all) { out.set(b, pos); pos += b.length; }
+  return out;
+}
+
+// Build and download an unsigned .ssd key share from the current keystore.
+async function exportKeyShare() {
+  const ks = await getKeystore();
+  const entries = Object.values(ks);
+
+  const content = {
+    type: 'keyring-share',
+    signing_pub_b64: null,
+    hash8: null,
+    key_name: null,
+    contacts: entries.map(k => ({
+      hash8: k.hash8,
+      public_key_b64: k.public_key,
+      name: k.name,
+      source: k.source || null,
+    })),
+  };
+
+  const enc = new TextEncoder();
+  const sourceBytes = enc.encode(JSON.stringify(content));
+  const sourceHash = 'sha256:' + await _sha256hex(sourceBytes);
+
+  const manifest = {
+    render_spec: 'ssd-key-transfer-1.0',
+    exported_at: new Date().toISOString(),
+    files: { 'source.json': sourceHash },
+  };
+  const manifestBytes = enc.encode(JSON.stringify(manifest, null, 2));
+
+  const zipBytes = _zipSSD({ 'manifest.json': manifestBytes, 'source.json': sourceBytes });
+  const blob = new Blob([zipBytes], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `tick-keys-${new Date().toISOString().slice(0, 10)}.ssd`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  return entries.length;
+}
+
 // Minimal ZIP reader — handles STORE (method 0) and DEFLATE (method 8).
 async function _unzipSSD(bytes) {
   let eocd = -1;
@@ -316,6 +449,15 @@ document.addEventListener('DOMContentLoaded', async () => {
       document.getElementById('key-input').value = '';
       showMessage(`Imported ${fp}`, false);
       renderKeys(await getKeystore());
+    } catch (e) {
+      showMessage(e.message, true);
+    }
+  });
+
+  document.getElementById('share-export-btn').addEventListener('click', async () => {
+    try {
+      const count = await exportKeyShare();
+      showMessage(`Exported ${count} key${count !== 1 ? 's' : ''}`, false);
     } catch (e) {
       showMessage(e.message, true);
     }
