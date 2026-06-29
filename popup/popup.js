@@ -454,6 +454,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  document.getElementById('share-import-btn').addEventListener('click', () => {
+    document.getElementById('share-file-input').click();
+  });
+
   document.getElementById('share-export-btn').addEventListener('click', async () => {
     try {
       const count = await exportKeyShare();
