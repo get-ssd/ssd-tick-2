@@ -49,14 +49,15 @@ web-ext run --target firefox-android --firefox-apk org.mozilla.fenix
 
 ## Loading on Chrome (desktop)
 
-Both browsers require the manifest to be named `manifest.json`. To load in Chrome, rename temporarily:
+Chrome loads from a built folder, **not** the source tree directly. Run the build script from `ssd-tick-2\`:
 
 ```
-manifest.json        → manifest-firefox.json   (back up)
-manifest-chrome.json → manifest.json
+build-chrome.bat
 ```
 
-Then load unpacked from `ssd-tick-2/` via `chrome://extensions` → Developer mode → Load unpacked. Restore the names afterwards.
+This produces `dist\chrome\` — a copy of the source with `manifest-chrome.json` substituted as `manifest.json` (and the Firefox background script excluded). Load **`dist\chrome\`** via `chrome://extensions` → Developer mode → **Load unpacked**.
+
+**After any change to Tick source, re-run `build-chrome.bat` before reloading the extension** — edits to the source tree are not visible in Chrome until the build copies them into `dist\chrome\`.
 
 ---
 
