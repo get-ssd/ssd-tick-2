@@ -19,7 +19,9 @@ platforms.register('fb', {
 const facebook = {
   id: 'facebook',
   name: 'Facebook',
-  hostnames: ['www.facebook.com', 'm.facebook.com'],
+  // localhost/127.0.0.1: the socialmedia-mock server's Facebook pages — the
+  // manifest only injects this file on /social-mock/facebook* paths there.
+  hostnames: ['www.facebook.com', 'm.facebook.com', 'localhost', '127.0.0.1'],
 
   _observer: null,
   _debounceTimer: null,
@@ -187,7 +189,11 @@ const facebook = {
   // [SSDKEY:] beacon handler — three import states per SPEC-PROTO §5.7.
   const handleKeyBeacon = textScanner.makeBeaconHandler(
     (hash8) => {
-      const pathParts = location.pathname.split('/').filter(Boolean);
+      let pathParts = location.pathname.split('/').filter(Boolean);
+      // socialmedia-mock serves profiles at /social-mock/facebook/<handle>.
+      if (pathParts[0] === 'social-mock' && pathParts[1] === 'facebook') {
+        pathParts = pathParts.slice(2);
+      }
       const urlHandle = pathParts.length === 1 && pathParts[0] !== 'profile.php'
         ? pathParts[0] : null;
       const identity  = urlHandle ? `fb:${urlHandle}` : null;
