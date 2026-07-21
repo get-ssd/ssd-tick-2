@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "SSD — Signed, Sealed, Delivered",
-  "version": "0.4.7",
+  "name": "SSD â€” Signed, Sealed, Delivered",
+  "version": "0.4.8",
   "browser_specific_settings": {
     "gecko": {
       "id": "ssd@idltd.com"

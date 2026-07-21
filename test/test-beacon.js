@@ -50,6 +50,17 @@ assert('rejects padding =',             parseKeyBeacon('[SSDKEY:' + VALID_HASH8 
 assert('[SSD:] content token not matched as beacon', parseKeyBeacon('[SSD:8588FECC:fb:j.smith:abcdef01:' + 'A'.repeat(86) + ':2026-06-20T12:00Z]') === null);
 assert('null on non-beacon string', parseKeyBeacon('hello world') === null);
 
+// X-profile paren form — X profiles cannot hold square brackets.
+const VALID_PAREN_BEACON = `(SSDKEY:${VALID_HASH8}:${VALID_PUBKEY})`;
+{
+  const r = parseKeyBeacon(VALID_PAREN_BEACON);
+  assert('paren beacon parses',        r !== null);
+  assert('paren hash8 correct',        r && r.hash8  === VALID_HASH8);
+  assert('paren pubkey correct',       r && r.pubkey === VALID_PUBKEY);
+}
+assert('rejects mixed delimiters [ )', parseKeyBeacon('[SSDKEY:' + VALID_HASH8 + ':' + VALID_PUBKEY + ')') === null);
+assert('rejects mixed delimiters ( ]', parseKeyBeacon('(SSDKEY:' + VALID_HASH8 + ':' + VALID_PUBKEY + ']') === null);
+
 // ── SSDKEY_PATTERN ────────────────────────────────────────────────────────────
 
 console.log('\nSSDKEY_PATTERN');
@@ -65,6 +76,13 @@ console.log('\nSSDKEY_PATTERN');
   const text = 'No beacon here [SSD:8588FECC:fb:j.smith:abcdef01:AAAA:2026-06-20T12:00Z]';
   SSDKEY_PATTERN.lastIndex = 0;
   assert('[SSD:] token not matched by SSDKEY_PATTERN', SSDKEY_PATTERN.exec(text) === null);
+}
+
+{
+  const text = `X bio with ${VALID_PAREN_BEACON} inside`;
+  SSDKEY_PATTERN.lastIndex = 0;
+  const m = SSDKEY_PATTERN.exec(text);
+  assert('pattern matches paren beacon in text', m !== null && m[0] === VALID_PAREN_BEACON);
 }
 
 // ── verifySelfConsistency — answers the two brief ambiguities ─────────────────

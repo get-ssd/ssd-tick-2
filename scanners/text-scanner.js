@@ -4,10 +4,14 @@
 
 // Parse a [SSDKEY:...] beacon string. Returns { hash8, pubkey } or null.
 // Format: [SSDKEY:{8-char-uppercase-hex}:{43-char-base64url-no-pad}]
+// X quirk: X profiles cannot hold square brackets, so on X profiles — and only
+// there — the beacon is parenthesised: (SSDKEY:...). Both forms parse.
 // SHA-256 self-consistency (hash8 == first 8 hex chars of SHA-256(pubkey_bytes))
 // is NOT checked here — it requires async crypto and is done by the handler.
 function parseKeyBeacon(raw) {
-  if (!raw.startsWith('[SSDKEY:') || !raw.endsWith(']')) return null;
+  const bracketed = raw.startsWith('[SSDKEY:') && raw.endsWith(']');
+  const parenned  = raw.startsWith('(SSDKEY:') && raw.endsWith(')');
+  if (!bracketed && !parenned) return null;
   const inner = raw.slice(8, -1);
   const colon = inner.indexOf(':');
   if (colon < 0) return null;
@@ -18,7 +22,12 @@ function parseKeyBeacon(raw) {
   return { hash8, pubkey };
 }
 
-const SSDKEY_PATTERN = /\[SSDKEY:[^\]]+\]/g;
+const SSDKEY_PATTERN = /\[SSDKEY:[^\]]+\]|\(SSDKEY:[^)]+\)/g;
+
+// Fast gate: does this text contain either beacon form?
+function hasBeacon(text) {
+  return text.indexOf('[SSDKEY:') !== -1 || text.indexOf('(SSDKEY:') !== -1;
+}
 
 function b64ToBytes(b64) {
   let s = b64.replace(/-/g, '+').replace(/_/g, '/');
@@ -46,7 +55,7 @@ const textScanner = {
   scan(callback, onKeyBeacon) {
     const bodyText  = document.body.textContent;
     const hasSSD    = bodyText.indexOf('[SSD:') !== -1;
-    const hasSSDKEY = bodyText.indexOf('[SSDKEY:') !== -1;
+    const hasSSDKEY = hasBeacon(bodyText);
     if (!hasSSD && !hasSSDKEY) {
       console.debug('[SSD:scan] no tokens found in page text');
       return;
@@ -67,7 +76,7 @@ const textScanner = {
             }
           }
           const t = node.textContent;
-          return (t.indexOf('[SSD:') !== -1 || t.indexOf('[SSDKEY:') !== -1)
+          return (t.indexOf('[SSD:') !== -1 || hasBeacon(t))
             ? NodeFilter.FILTER_ACCEPT
             : NodeFilter.FILTER_SKIP;
         },
@@ -82,7 +91,7 @@ const textScanner = {
       const text = node.textContent;
 
       // [SSDKEY:] beacons — parse and fire immediately; no context-grouping.
-      if (onKeyBeacon && text.indexOf('[SSDKEY:') !== -1) {
+      if (onKeyBeacon && hasBeacon(text)) {
         SSDKEY_PATTERN.lastIndex = 0;
         let m;
         while ((m = SSDKEY_PATTERN.exec(text)) !== null) {
