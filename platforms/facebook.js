@@ -114,6 +114,10 @@ const facebook = {
 
 (function bootstrapFacebook() {
   if (!facebook.hostnames.includes(location.hostname)) return;
+  // On localhost the manifest injects every platform module on /social-mock/*;
+  // each module activates only on its own platform's paths.
+  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (isLocal && !location.pathname.startsWith('/social-mock/facebook')) return;
 
   // Block-level HTML elements — their boundaries become \n in extracted text,
   // mirroring what el.innerText produces. Without this, paragraph breaks in

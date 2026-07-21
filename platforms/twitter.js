@@ -36,7 +36,9 @@ platforms.register('x', {
 const twitter = {
   id: 'twitter',
   name: 'Twitter/X',
-  hostnames: ['twitter.com', 'x.com'],
+  // localhost/127.0.0.1: the socialmedia-mock server's X pages — the bootstrap
+  // path guard restricts activation to /social-mock/x* there.
+  hostnames: ['twitter.com', 'x.com', 'localhost', '127.0.0.1'],
 
   _observer: null,
   _debounceTimer: null,
@@ -175,6 +177,10 @@ const twitter = {
 
 (function bootstrapTwitter() {
   if (!twitter.hostnames.includes(location.hostname)) return;
+  // On localhost the manifest injects every platform module on /social-mock/*;
+  // each module activates only on its own platform's paths.
+  const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  if (isLocal && !location.pathname.startsWith('/social-mock/x')) return;
 
   // Extract the post body from a tweet article using Twitter's stable
   // data-testid="tweetText" attribute. Returns innerText or '' on failure.
@@ -211,9 +217,13 @@ const twitter = {
   // [SSDKEY:] beacon handler — three import states per SPEC-PROTO §5.7.
   const handleKeyBeacon = textScanner.makeBeaconHandler(
     (hash8) => {
-      const pathMatch = location.pathname.match(/^\/(@?[-\w]+)/);
+      // socialmedia-mock serves profiles at /social-mock/x/<handle>; the mock's
+      // fixtures sign with the x: identity prefix.
+      const isMock   = location.pathname.startsWith('/social-mock/x');
+      const pathname = isMock ? location.pathname.slice('/social-mock/x'.length) : location.pathname;
+      const pathMatch = pathname.match(/^\/(@?[-\w]+)/);
       const urlHandle = pathMatch ? pathMatch[1].replace(/^@/, '') : null;
-      const identity  = urlHandle ? `tw:${urlHandle}` : null;
+      const identity  = urlHandle ? `${isMock ? 'x' : 'tw'}:${urlHandle}` : null;
       const titleMatch = document.title.match(/\(@([-\w]+)\)/);
       const name = titleMatch ? `@${titleMatch[1]}`
                  : (urlHandle ? `@${urlHandle}` : hash8);

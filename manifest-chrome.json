@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SSD — Signed, Sealed, Delivered",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.facebook.com/*",
@@ -40,7 +40,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:8080/social-mock/facebook*", "http://127.0.0.1:8080/social-mock/facebook*"],
+      "matches": ["http://localhost:8080/social-mock/*", "http://127.0.0.1:8080/social-mock/*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",
@@ -56,7 +56,8 @@
         "analyser/panel.js",
         "analyser/searcher.js",
         "analyser/analyser.js",
-        "platforms/facebook.js"
+        "platforms/facebook.js",
+        "platforms/twitter.js"
       ],
       "css": ["ui/styles.css"],
       "run_at": "document_idle"
