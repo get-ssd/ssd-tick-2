@@ -1,24 +1,26 @@
-// platforms/reddit.js
-// Reddit platform module. Implements the platform interface contract
-// (verification side only). See PLAT-Reddit-v0_1.
+// platforms/telegram.js
+// Telegram platform module (verification side). Mirrors the reddit/facebook
+// contract: observe() re-runs the scanners, injectIndicator() places a badge,
+// cleanup() disconnects. Text extraction treats <div dir="auto"> as a soft
+// line-break (single \n), matching how Telegram renders message lines.
 //
-// The platform module does NOT parse post structure or extract text. It only:
-//   1. observe()         — tells the core scanners when to re-run
-//   2. injectIndicator() — places a badge near where a sig was found
-//   3. cleanup()         — disconnects observers
+// Target DOM (t.me/s/<channel> public preview, and the socialmedia-mock):
+//   - message text: <div class="tgme_widget_message_text"> with one
+//     <div dir="auto"> per line, token as the last line
+//   - channel description carries an [SSDKEY:hash8:pubkey] beacon
 
-platforms.register('rd', {
-  profileUrl:     handle => `https://www.reddit.com/user/${encodeURIComponent(handle)}`,
-  label:          'Visit their Reddit profile to import key',
-  nameFromHandle: handle => `u/${handle}`,
+platforms.register('tg', {
+  profileUrl:     handle => `https://t.me/${encodeURIComponent(handle)}`,
+  label:          'Visit their Telegram channel to import key',
+  nameFromHandle: handle => `@${handle}`,
 });
 
-const reddit = {
-  id: 'reddit',
-  name: 'Reddit',
-  // localhost/127.0.0.1: the socialmedia-mock server's Reddit pages — the
-  // manifest only injects this file on /social-mock/reddit* paths there.
-  hostnames: ['www.reddit.com', 'old.reddit.com', 'localhost', '127.0.0.1'],
+const telegram = {
+  id: 'telegram',
+  name: 'Telegram',
+  // localhost/127.0.0.1: the socialmedia-mock server's Telegram pages — the
+  // manifest only injects this file on /social-mock/telegram* paths there.
+  hostnames: ['t.me', 'web.telegram.org', 'localhost', '127.0.0.1'],
 
   _observer: null,
   _debounceTimer: null,
@@ -67,12 +69,9 @@ const reddit = {
 
 // ── Content-script bootstrap ───────────────────────────────────────────────────
 
-(function bootstrapReddit() {
-  if (!reddit.hostnames.includes(location.hostname)) return;
+(function bootstrapTelegram() {
+  if (!telegram.hostnames.includes(location.hostname)) return;
 
-  // Standard HTML block elements used by Reddit's markdown renderer.
-  // Reddit renders post/comment markdown to <p>, <ul>/<li>, <blockquote>, <pre>,
-  // <h1>–<h6>, <table>, etc. — the same set as Facebook's block structure.
   const BLOCK_TAGS = new Set([
     'ADDRESS','ARTICLE','ASIDE','BLOCKQUOTE','DD','DIV','DL','DT',
     'FIELDSET','FIGCAPTION','FIGURE','FOOTER','FORM',
@@ -81,6 +80,8 @@ const reddit = {
     'PRE','SECTION','SUMMARY','TABLE','TD','TH','TR','UL',
   ]);
 
+  // <div dir="..."> is a line-level break (single \n); other blocks are
+  // paragraph-level (double \n). Matches Telegram's per-line message markup.
   function extractText(el) {
     let out = '';
     for (const node of el.childNodes) {
@@ -93,11 +94,14 @@ const reddit = {
         if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue;
         const inner = extractText(node);
         if (BLOCK_TAGS.has(tag) && inner !== '') {
-          if (out.length > 0 && !out.endsWith('\n')) out += '\n';
-          if (!out.endsWith('\n\n')) out += '\n';
+          const isLine = tag === 'DIV' && node.hasAttribute('dir');
+          if (out.length > 0) {
+            if (!out.endsWith('\n')) out += '\n';
+            if (!isLine && !out.endsWith('\n\n')) out += '\n';
+          }
           out += inner;
           if (!out.endsWith('\n')) out += '\n';
-          if (!out.endsWith('\n\n')) out += '\n';
+          if (!isLine && !out.endsWith('\n\n')) out += '\n';
         } else {
           out += inner;
         }
@@ -123,21 +127,18 @@ const reddit = {
     return '';
   }
 
-  // [SSDKEY:] beacon handler — three import states per SPEC-PROTO §5.7.
   const handleKeyBeacon = textScanner.makeBeaconHandler(
     (hash8) => {
-      // Real Reddit serves profiles at /user/<h> or /u/<h>; the socialmedia-mock
-      // serves them at /social-mock/reddit/user/<h> — match the /user|u/ segment
-      // wherever it appears in the path.
-      const pathMatch   = location.pathname.match(/(?:^|\/)(?:user|u)\/([-\w]+)/i);
-      const urlHandle   = pathMatch ? pathMatch[1] : null;
-      const identity    = urlHandle ? `rd:${urlHandle}` : null;
-      const title       = document.title;
-      const uSlash      = title.match(/\bu\/([-\w]+)/i);
-      const overviewFor = title.match(/overview\s+for\s+([-\w]+)/i);
-      const titleName   = uSlash ? `u/${uSlash[1]}` : overviewFor ? `u/${overviewFor[1]}` : '';
-      const h1Name      = document.querySelector('h1')?.innerText?.trim() || '';
-      const name = titleName || h1Name || hash8;
+      // socialmedia-mock: /social-mock/telegram/<channel>[/<id>];
+      // real: t.me/<channel> or t.me/s/<channel>.
+      const m = location.pathname.match(/\/telegram\/([-\w]+)/i)
+             || location.pathname.match(/\/s\/([-\w]+)/i)
+             || location.pathname.match(/^\/([-\w]+)/);
+      const urlHandle = m ? m[1] : null;
+      const identity  = urlHandle ? `tg:${urlHandle}` : null;
+      const atName    = (document.querySelector('.tgme_channel_info_header_username, .tg-channel-username')?.innerText || '').trim();
+      const h1Name    = document.querySelector('h1, .tgme_channel_info_header_title, .tg-channel-title')?.innerText?.trim() || '';
+      const name = (urlHandle ? `@${urlHandle}` : '') || atName || h1Name || hash8;
       return { name, identity };
     },
     () => onNewContent()
@@ -156,7 +157,7 @@ const reddit = {
         },
         handleKeyBeacon
       );
-      console.debug('[SSD:reddit] scan complete, jobs:', jobs.length);
+      console.debug('[SSD:tg] scan complete, jobs:', jobs.length);
       for (const { textNode, parsedToken, commit, rawPostText } of jobs) {
         const scanningEl = badge.create({
           state: 'SCANNING',
@@ -167,15 +168,10 @@ const reddit = {
           isShort: parsedToken ? parsedToken.isShort : false,
           vaultUsed: false,
         });
-        const badgeEl = reddit.injectIndicator(textNode, scanningEl) || scanningEl;
+        const badgeEl = telegram.injectIndicator(textNode, scanningEl) || scanningEl;
 
-        if (!parsedToken) {
-          console.debug('[SSD:reddit] unrecognised token format, badged but not verified');
-          commit();
-          continue;
-        }
+        if (!parsedToken) { commit(); continue; }
 
-        console.debug('[SSD:reddit] rawPostText length:', rawPostText.length, 'preview:', rawPostText.slice(0, 80).replace(/\n/g, '↵'));
         let result;
         try {
           result = await verifier.verify(parsedToken.raw, rawPostText);
@@ -187,7 +183,7 @@ const reddit = {
             timestamp: parsedToken.timestamp, isShort: false, vaultUsed: false,
           };
         }
-        console.debug('[SSD:reddit] verify result:', result.state, 'hash8:', result.hash8);
+        console.debug('[SSD:tg] verify result:', result.state, 'hash8:', result.hash8);
         result._rawPostText = rawPostText;
         badge.update(badgeEl, result);
         commit();
@@ -198,10 +194,10 @@ const reddit = {
   }
 
   keyring.load().then(() => {
-    reddit.observe(onNewContent);
+    telegram.observe(onNewContent);
   });
 
-  window.addEventListener('unload', () => reddit.cleanup());
+  window.addEventListener('unload', () => telegram.cleanup());
 })();
 
-if (typeof module !== 'undefined' && module.exports) module.exports = reddit;
+if (typeof module !== 'undefined' && module.exports) module.exports = telegram;
