@@ -100,9 +100,9 @@ npx web-ext run --target=firefox-android \
   --source-dir="<repo>/ssd.tick-2/dist/firefox-unpacked"
 ```
 
-`dist/firefox-unpacked` is the built Firefox extension unzipped (from
-`build-firefox.bat`'s xpi). Use it rather than the repo root, or web-ext will
-package `.git`, `node_modules` and `dist`.
+`dist/firefox-unpacked` is the built Firefox extension unzipped —
+`build-firefox.bat` refreshes it from the xpi on every build. Use it rather
+than the repo root, or web-ext will package `.git`, `node_modules` and `dist`.
 
 **This installs a *temporary* add-on — it is removed when the `web-ext` session
 ends or Firefox restarts.** Keep that terminal open for the whole test.
