@@ -1,6 +1,6 @@
 @echo off
 :: Packages the Firefox shell into an .xpi for side-loading on Firefox for Android.
-:: Output: dist\ssd-tick-firefox.xpi
+:: Output: dist\ssd-tick-firefox.xpi and dist\firefox-unpacked\ (for web-ext)
 :: Usage: run from ssd-tick-2\
 :: Note: uses ZipArchive.CreateEntry to ensure forward-slash paths (required by Firefox).
 
@@ -33,9 +33,20 @@ powershell -NoProfile -Command ^
   "}; " ^
   "$zip.Dispose(); $fs.Dispose()"
 
-if exist "%OUT%" (
-  echo Built: %OUT%
-) else (
+if not exist "%OUT%" (
   echo ERROR: build failed.
   exit /b 1
 )
+echo Built: %OUT%
+
+:: Unzipped copy for web-ext --source-dir (see test\TESTING-MOCK.md).
+set UNPACKED=dist\firefox-unpacked
+if exist "%UNPACKED%" rmdir /s /q "%UNPACKED%"
+powershell -NoProfile -Command ^
+  "Add-Type -Assembly 'System.IO.Compression.FileSystem'; " ^
+  "[System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path '%OUT%').Path, (Join-Path (Resolve-Path '.').Path '%UNPACKED%'))"
+if not exist "%UNPACKED%\manifest.json" (
+  echo ERROR: unzip failed.
+  exit /b 1
+)
+echo Built: %UNPACKED%
