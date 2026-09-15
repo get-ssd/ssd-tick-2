@@ -81,24 +81,37 @@ const reddit = {
     'PRE','SECTION','SUMMARY','TABLE','TD','TH','TR','UL',
   ]);
 
-  function extractText(el) {
+  // Recovers the text as rendered, not as it sits in the HTML source. Live
+  // Reddit indents its markup (`<p>\n      text\n    </p>`), so text nodes are
+  // collapsed the way CSS `white-space: normal` does: whitespace runs become a
+  // single space, dropped at line starts and before block breaks. <pre> is
+  // kept verbatim.
+  function extractText(el, inPre = false) {
     let out = '';
     for (const node of el.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
-        out += node.nodeValue;
+        if (inPre) { out += node.nodeValue; continue; }
+        let t = node.nodeValue.replace(/[ \t\n\r\f]+/g, ' ');
+        if (out === '' || out.endsWith('\n') || out.endsWith(' ')) t = t.replace(/^ /, '');
+        out += t;
       } else if (node.nodeName === 'BR') {
+        if (!inPre) out = out.replace(/ +$/, '');
         out += '\n';
       } else if (node.nodeType === Node.ELEMENT_NODE) {
         const tag = node.nodeName;
         if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue;
-        const inner = extractText(node);
+        const pre = inPre || tag === 'PRE';
+        let inner = extractText(node, pre);
+        if (BLOCK_TAGS.has(tag) && !pre) inner = inner.replace(/ +$/, '');
         if (BLOCK_TAGS.has(tag) && inner !== '') {
+          if (!inPre) out = out.replace(/ +$/, '');
           if (out.length > 0 && !out.endsWith('\n')) out += '\n';
           if (!out.endsWith('\n\n')) out += '\n';
           out += inner;
           if (!out.endsWith('\n')) out += '\n';
           if (!out.endsWith('\n\n')) out += '\n';
         } else {
+          if (!pre && (out === '' || out.endsWith('\n') || out.endsWith(' '))) inner = inner.replace(/^ /, '');
           out += inner;
         }
       }
