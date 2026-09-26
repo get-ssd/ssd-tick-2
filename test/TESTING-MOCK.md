@@ -93,7 +93,7 @@ Prerequisites: USB debugging authorised on the phone; Nightly →
 **Settings → Remote debugging via USB → ON**.
 
 ```
-adb reverse tcp:8080 tcp:8080     # phone's localhost:8080 → this PC's mock server
+adb reverse tcp:10117 tcp:10117     # phone's localhost:10117 → this PC's mock server
 npx web-ext run --target=firefox-android \
   --android-device=<serial> \
   --firefox-apk=org.mozilla.fenix \
@@ -107,7 +107,7 @@ than the repo root, or web-ext will package `.git`, `node_modules` and `dist`.
 **This installs a *temporary* add-on — it is removed when the `web-ext` session
 ends or Firefox restarts.** Keep that terminal open for the whole test.
 
-Then on the phone open `http://localhost:8080/social-mock/facebook`. A fresh
+Then on the phone open `http://localhost:10117/social-mock/facebook`. A fresh
 profile has an empty keyring, so **every post reads KEY_UNREACHABLE** — that
 alone proves the content script runs on Gecko/Android. For VALID/MISMATCH,
 open `/social-mock/facebook/alice.mock` and `…/bob.mock` and tap the

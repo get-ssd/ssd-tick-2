@@ -116,7 +116,7 @@ Click any badge to open the in-page popup with signer name, hash8, and timestamp
 | Twitter / X (`twitter.com`, `x.com`) | Verified working | Self-reply token or inline body token |
 | Facebook (`www.facebook.com`, `m.facebook.com`) | Verified working | Inline body token |
 | Reddit (`www.reddit.com`, `old.reddit.com`) | Untested | Inline body token |
-| Localhost test page (`localhost:8080`) | Working | Inline, via test bootstrap |
+| Localhost test pages (any port) | Working | Inline, via test bootstrap or path-scoped platform modules |
 
 **Twitter note:** The primary delivery method is a self-reply — the author posts the clean tweet, then immediately replies to themselves with the `—SSD·…—` token. Tick links the reply back to the parent tweet and badges the parent. Inline body tokens also work (backwards compat).
 

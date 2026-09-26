@@ -11,8 +11,8 @@
     "https://twitter.com/*",
     "https://x.com/*",
     "https://idltd.github.io/*",
-    "http://localhost:8080/*",
-    "http://127.0.0.1:8080/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
     "http://localhost:8099/*"
   ],
   "background": {
@@ -20,8 +20,8 @@
   },
   "content_scripts": [
     {
-      "matches": ["http://localhost:8080/*", "http://127.0.0.1:8080/*"],
-      "exclude_matches": ["http://localhost:8080/social-mock/*", "http://127.0.0.1:8080/social-mock/*"],
+      "matches": ["http://localhost/*", "http://127.0.0.1/*"],
+      "exclude_matches": ["http://localhost/social-mock/*", "http://127.0.0.1/social-mock/*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",
@@ -40,7 +40,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:8080/social-mock/facebook*", "http://127.0.0.1:8080/social-mock/facebook*"],
+      "matches": ["http://localhost/social-mock/facebook*", "http://127.0.0.1/social-mock/facebook*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",
@@ -62,7 +62,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:8080/social-mock/x*", "http://127.0.0.1:8080/social-mock/x*"],
+      "matches": ["http://localhost/social-mock/x*", "http://127.0.0.1/social-mock/x*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",
@@ -84,7 +84,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:8080/social-mock/reddit*", "http://127.0.0.1:8080/social-mock/reddit*"],
+      "matches": ["http://localhost/social-mock/reddit*", "http://127.0.0.1/social-mock/reddit*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",
@@ -103,7 +103,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:8080/social-mock/telegram*", "http://127.0.0.1:8080/social-mock/telegram*"],
+      "matches": ["http://localhost/social-mock/telegram*", "http://127.0.0.1/social-mock/telegram*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",
@@ -122,7 +122,7 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["http://localhost:8080/social-mock/whatsapp*", "http://127.0.0.1:8080/social-mock/whatsapp*"],
+      "matches": ["http://localhost/social-mock/whatsapp*", "http://127.0.0.1/social-mock/whatsapp*"],
       "js": [
         "core/cfg.js",
         "core/token-parser.js",

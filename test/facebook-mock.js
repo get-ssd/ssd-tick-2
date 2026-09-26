@@ -18,7 +18,7 @@
 //   node test/facebook-mock.js            (headed, closes at end)
 //   node test/facebook-mock.js --keep     (leave the browser open to inspect)
 //
-// Requires the socialmedia-mock server running on http://localhost:8080.
+// Requires the socialmedia-mock server running on http://localhost:10117.
 
 const puppeteer = require('./node_modules/puppeteer-core');
 const path      = require('path');
@@ -28,7 +28,7 @@ const { spawn } = require('child_process');
 
 const CHROME     = 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe';
 const EXT_DIR    = path.resolve(__dirname, '..');            // load the repo root (matches manifest.json)
-const BASE       = 'http://localhost:8080/social-mock';
+const BASE       = 'http://localhost:10117/social-mock';
 const FEED_URL   = `${BASE}/facebook`;
 const DEBUG_PORT = 9224;
 const KEEP_OPEN  = process.argv.includes('--keep');
@@ -37,7 +37,7 @@ const KEEP_OPEN  = process.argv.includes('--keep');
 // Verified against the live targets at runtime; used only as a fallback.
 const EXT_ID_FALLBACK = 'nkeimhogjdpnpccoofpliimaahmaaome';
 
-const HOST_PERMS = ['http://localhost:8080/*', 'http://127.0.0.1:8080/*'];
+const HOST_PERMS = ['http://localhost/*', 'http://127.0.0.1/*'];
 
 // Key cards to seed — mirrors what storeFetchedKey writes for an imported card.
 // public_key values are the fixtures' pubB64 (base64url Ed25519 raw keys).

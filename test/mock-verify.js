@@ -20,7 +20,7 @@ const { spawn } = require('child_process');
 
 const EXT_ID = 'oikjghlmjiapoliomcdnkfbkkfcoellh';   // same id in Brave & Chromium (same dist/chrome path)
 const PORT   = 9500;
-const BASE   = 'http://localhost:8080/social-mock';
+const BASE   = 'http://localhost:10117/social-mock';
 const KEEP_OPEN = !process.argv.includes('--close');
 
 const BROWSERS = {
