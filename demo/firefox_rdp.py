@@ -16,13 +16,16 @@ import json
 import socket
 import time
 
+# Generous: this PC is slow — a temporary add-on install has taken 17 s.
+TIMEOUT = 30.0
+
 
 class RDPError(RuntimeError):
     pass
 
 
 class RDP:
-    def __init__(self, port, host="127.0.0.1", timeout=15.0):
+    def __init__(self, port, host="127.0.0.1", timeout=TIMEOUT):
         self.sock = socket.create_connection((host, port), timeout=timeout)
         self.buf = b""
         self.events = []
@@ -71,7 +74,7 @@ class RDP:
                 return msg
             self.events.append(msg)
 
-    def wait_event(self, match, timeout=15.0):
+    def wait_event(self, match, timeout=TIMEOUT):
         end = time.time() + timeout
         while True:
             for i, msg in enumerate(self.events):
@@ -85,7 +88,7 @@ class RDP:
             except socket.timeout:
                 pass
             finally:
-                self.sock.settimeout(15.0)
+                self.sock.settimeout(TIMEOUT)
 
     # ── Root-level helpers ─────────────────────────────────────────────────
     def root(self):
@@ -128,7 +131,7 @@ class RDP:
     def navigate(self, target, url):
         self.request(target["actor"], "navigateTo", url=url)
 
-    def evaluate(self, target, js, timeout=15.0):
+    def evaluate(self, target, js, timeout=TIMEOUT):
         """Evaluate js in the target's global and return the result.
 
         Objects come back as grips, so callers return JSON.stringify(...) and

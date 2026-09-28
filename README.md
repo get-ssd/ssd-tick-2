@@ -5,7 +5,7 @@ Browser extension that detects and verifies SSD-signed posts on social media. Wh
 - **Firefox** (all platforms, including Firefox for Android) — primary delivery target
 - **Chrome** (desktop only — Chrome for Android does not support extensions)
 
-Current version: **0.4.11**
+Current version: **0.4.12**
 
 ---
 
