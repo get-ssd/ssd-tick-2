@@ -5,7 +5,7 @@ Browser extension that detects and verifies SSD-signed posts on social media. Wh
 - **Firefox** (all platforms, including Firefox for Android) — primary delivery target
 - **Chrome** (desktop only — Chrome for Android does not support extensions)
 
-Current version: **0.4.10**
+Current version: **0.4.11**
 
 ---
 
@@ -172,8 +172,12 @@ prints beside it: Alice VALID, Bob MISMATCH, Carol KEY_UNREACHABLE — 18 per br
 Firefox is driven over its Remote Debugging Protocol (`demo/firefox_rdp.py`,
 stdlib only): on Android via `adb forward` to Nightly's
 `firefox-debugger-socket`, on Windows via `-start-debugger-server` on a throwaway
-profile. Tick is installed as a temporary add-on; keys are imported by clicking
-the mock's "Add key" beacons. It attaches to the Nightly already running in the
+profile. Tick is installed as a temporary add-on after uninstalling any previous
+copy, so every run starts with an empty keyring. On the Facebook feed Alice and
+Carol read KEY_UNREACHABLE and Bob MISMATCH (tampering shows without his key); the
+runner follows Alice's link, taps "Add key", goes back, refreshes (Tick does not
+re-verify a page restored by Back — by design, the user refreshes) and checks Alice
+is VALID, then the same for Bob. It attaches to the Nightly already running in the
 tablet's foreground user, so the Demo user (10) works — geckodriver/Selenium
 could not (they assume Android user 0).
 
@@ -183,7 +187,8 @@ away (uiautomator). Windows Firefox runs on a throwaway profile with the first-r
 data-choices/terms prompts disabled — those are browser-modal and stall the debugger.
 Logs go to `demo/runs/`. Build `dist/` first (`build-firefox.bat`).
 
-Status (2026-09-28, v0.4.10): 18/18 on all three tablets and on Windows Firefox.
+Status (2026-09-28, v0.4.11): fresh-keyring walk-through plus 18/18 on all three tablets
+(Windows Firefox last run at v0.4.10: 18/18).
 
 ---
 

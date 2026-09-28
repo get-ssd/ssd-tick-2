@@ -96,6 +96,13 @@ class RDP:
         addons = self.root()["addonsActor"]
         return self.request(addons, "installTemporaryAddon", addonPath=addon_path, openDevTools=False)["addon"]
 
+    def uninstall_addon(self, addon_id):
+        """Remove an add-on (and its storage). Returns False if it was not installed."""
+        if not any(a.get("id") == addon_id for a in self.request("root", "listAddons")["addons"]):
+            return False
+        self.request(self.root()["addonsActor"], "uninstallAddon", addonId=addon_id)
+        return True
+
     def tabs(self):
         return self.request("root", "listTabs")["tabs"]
 

@@ -7,9 +7,12 @@
     py demo/tick_run.py --serial SERIAL-1  # one tablet
 
 Firefox (tablet and desktop) is driven over the Remote Debugging Protocol
-(firefox_rdp.py): Tick is installed as a temporary add-on, keys are imported
-through the mock's own "Add key" beacon buttons (the user path), and each
-post's badge is compared with the verdict the mock prints beside it.
+(firefox_rdp.py): Tick is installed as a temporary add-on, any previous install is
+removed first so the keyring starts empty. On the Facebook feed Alice and Carol
+must read KEY_UNREACHABLE and Bob MISMATCH (tampering shows without his key); the
+runner follows Alice's link, taps "Add key", goes back, refreshes and checks Alice
+is VALID, then does the same for Bob. After
+that every platform's badges are compared with the verdict the mock prints.
 Expected set: Alice VALID, Bob MISMATCH, Carol KEY_UNREACHABLE (never seeded).
 
 Needs: the mock server on :10117 (../../socialmedia-mock/00-startup.bat), a
@@ -49,7 +52,8 @@ PLATFORMS = [
     ("WhatsApp", ".wa-expect", ".message-in",
      [f"{BASE}/whatsapp/15550000001", f"{BASE}/whatsapp/15550000002", f"{BASE}/whatsapp/15550000003"]),
 ]
-SEED_PAGES = [f"{BASE}/facebook/alice.mock", f"{BASE}/facebook/bob.mock"]
+TICK_ID = "ssd@idltd.com"
+FEED = f"{BASE}/facebook"
 
 JS_BADGE_COUNT = """JSON.stringify((() => {
   const b = [...document.querySelectorAll('.ssd-indicator')];
@@ -76,6 +80,27 @@ JS_BUTTON_TEXT = """JSON.stringify([...document.querySelectorAll('button,a')]
   .filter(x => x.className && /beacon|key/i.test(x.className + ' ' + x.textContent))
   .map(x => x.textContent.trim()))"""
 
+# Feed badge state per signer — each post's text names its signer ("Alice's signed message ...").
+JS_FEED_STATES = """JSON.stringify([...document.querySelectorAll('.fb-post')].map(p => {
+  const who = ((p.innerText.match(/(Alice|Bob|Carol)'s/) || [])[1] || '?');
+  const b = p.querySelector('.ssd-indicator');
+  return [who, b ? (b.dataset.ssdState || 'NO_STATE') : 'NO_BADGE'];
+}))"""
+
+JS_FOLLOW_AUTHOR = """(() => {
+  const a = [...document.querySelectorAll('a.fb-author')].find(x => x.getAttribute('href').endsWith('/%s'));
+  if (!a) return 'no link';
+  a.click();
+  return a.href;
+})()"""
+
+# After each step of the fresh walk-through: expected feed state per signer.
+WALK_STEPS = [
+    ("no keys", None, {"Alice": "KEY_UNREACHABLE", "Bob": "MISMATCH", "Carol": "KEY_UNREACHABLE"}),
+    ("Alice's key added", "alice.mock", {"Alice": "VALID", "Bob": "MISMATCH", "Carol": "KEY_UNREACHABLE"}),
+    ("Bob's key added", "bob.mock", {"Alice": "VALID", "Bob": "MISMATCH", "Carol": "KEY_UNREACHABLE"}),
+]
+
 
 class Log:
     def __init__(self, path):
@@ -100,30 +125,52 @@ class Session:
     def __init__(self, name, rdp, log):
         self.name, self.rdp, self.log = name, rdp, log
 
-    def goto(self, url, settle=1.0):
-        target = self.rdp.tab_target()
-        self.rdp.navigate(target, url)
+    def wait_loaded(self, url, settle=1.0):
         end = time.time() + 20
         while time.time() < end:
             time.sleep(0.5)
             try:
                 target = self.rdp.tab_target()
-                if self.rdp.evaluate(target, "location.href") == url and \
-                        self.rdp.evaluate(target, "document.readyState") == "complete":
+                if self.rdp.evaluate(target, "location.href") == url and                         self.rdp.evaluate(target, "document.readyState") == "complete":
                     break
             except RDPError:
                 pass  # page swapped mid-evaluation; retry
         time.sleep(settle)
         return self.rdp.tab_target()
 
-    def seed_keys(self):
-        for url in SEED_PAGES:
-            target = self.goto(url)
-            clicked = self.rdp.evaluate(target, JS_CLICK_ADD_KEY)
-            # The beacon verifies the key card before storing it; give it time to finish.
-            time.sleep(4)
-            after = self.rdp.evaluate(self.rdp.tab_target(), JS_BUTTON_TEXT)
-            self.log(f"{self.name}: seed {url.rsplit('/', 1)[1]} — clicked {clicked}, now {after}")
+    def goto(self, url, settle=1.0):
+        self.rdp.navigate(self.rdp.tab_target(), url)
+        return self.wait_loaded(url, settle)
+
+    def walkthrough(self):
+        """Fresh keyring: feed shows every post unrecognised; follow Alice's link,
+        add her key, go back, refresh; then Bob. Check the feed after each step.
+
+        Going back restores the feed from the back/forward cache with the old
+        badges — Tick deliberately does not re-verify on its own (kept light), so
+        the user refreshes. The pre-refresh state is logged, not checked."""
+        target = self.goto(FEED)
+        for step, profile, want in WALK_STEPS:
+            if profile:
+                href = self.rdp.evaluate(target, JS_FOLLOW_AUTHOR % profile)
+                if not self.log.check(href.endswith(profile), f"{self.name}: follow link to {profile} ({href})"):
+                    return
+                target = self.wait_loaded(href)
+                before = self.rdp.evaluate(target, JS_BUTTON_TEXT)
+                clicked = self.rdp.evaluate(target, JS_CLICK_ADD_KEY)
+                time.sleep(4)  # the beacon verifies the key card before storing it
+                after = self.rdp.evaluate(self.rdp.tab_target(), JS_BUTTON_TEXT)
+                self.log.check(int(clicked or 0) > 0, f"{self.name}: {profile} — {before} → clicked {clicked} → {after}")
+                self.rdp.evaluate(self.rdp.tab_target(), "setTimeout(() => history.back(), 50)")
+                target = self.wait_loaded(FEED)
+                stale = ", ".join(f"{w} {s}" for w, s in self.rdp.evaluate(target, JS_FEED_STATES))
+                self.log(f"{self.name}: back on feed, before refresh: {stale}")
+                self.rdp.evaluate(target, "setTimeout(() => location.reload(), 50)")
+                time.sleep(1)  # let the reload start so wait_loaded doesn't see the old page
+                target = self.wait_loaded(FEED)
+            self.wait_badges(target, ".fb-expect")
+            for who, state in self.rdp.evaluate(target, JS_FEED_STATES):
+                self.log.check(state == want.get(who), f"{self.name}: feed, {step:<18} {who:<5} expected {want.get(who)!s:<16} actual {state}")
 
     def wait_badges(self, target, expect_sel, timeout=12):
         end = time.time() + timeout
@@ -220,12 +267,14 @@ def run_tablet(tablet, log):
         log.check(False, f"{tablet.name}: setup — {e}")
         return
     try:
+        if rdp.uninstall_addon(TICK_ID):
+            log(f"{tablet.name}: old Tick uninstalled (keyring wiped)")
         addon = rdp.install_temporary_addon(DEVICE_XPI)
         log(f"{tablet.name}: Tick installed ({addon.get('id')})")
         time.sleep(1.5)  # let the notice appear before looking for it
         tablet.dismiss_added_notice(log)
         s = Session(tablet.name, rdp, log)
-        s.seed_keys()
+        s.walkthrough()
         s.run_platforms()
     except (RDPError, OSError) as e:
         log.check(False, f"{tablet.name}: {e}")
@@ -276,7 +325,7 @@ def run_desktop_firefox(log, port=6099):
         addon = rdp.install_temporary_addon(XPI)
         log(f"Windows Firefox: Tick installed ({addon.get('id')})")
         s = Session("Windows Firefox", rdp, log)
-        s.seed_keys()
+        s.walkthrough()
         s.run_platforms()
     except (RDPError, OSError) as e:
         log.check(False, f"Windows Firefox: {e}")
