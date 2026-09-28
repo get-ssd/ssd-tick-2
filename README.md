@@ -152,11 +152,37 @@ ssd-tick-2/
 ├── scanners/
 │   ├── text-scanner.js         DOM text node scanner — finds [SSD:…] inline tokens
 │   └── image-scanner.js        QR image scanner stub (not yet implemented)
+├── demo/                       Multi-browser runner (see "Scripted testing")
 └── test/
     ├── bootstrap.js            Localhost test page bootstrap
     ├── e2e.js                  End-to-end tests (sign + verify round-trip)
     └── test-page.html          Test harness page
 ```
+
+---
+
+## Scripted testing
+
+`demo/run.bat` (or `py demo/tick_run.py`) runs Tick against `socialmedia-mock`
+(`:10117`) on every tablet in `demo/tablets.json` (Firefox Nightly) and on
+Windows Firefox, and optionally Chromium (`--chromium`, which calls
+`test/mock-verify.js`). Each post's badge is compared with the verdict the mock
+prints beside it: Alice VALID, Bob MISMATCH, Carol KEY_UNREACHABLE — 18 per browser.
+
+Firefox is driven over its Remote Debugging Protocol (`demo/firefox_rdp.py`,
+stdlib only): on Android via `adb forward` to Nightly's
+`firefox-debugger-socket`, on Windows via `-start-debugger-server` on a throwaway
+profile. Tick is installed as a temporary add-on; keys are imported by clicking
+the mock's "Add key" beacons. It attaches to the Nightly already running in the
+tablet's foreground user, so the Demo user (10) works — geckodriver/Selenium
+could not (they assume Android user 0).
+
+Tablet prerequisites: Nightly installed for the Demo user, "Remote debugging via
+USB" on. Nightly shows an "added" notice with OK on each install — harmless.
+Logs go to `demo/runs/`. Build `dist/` first (`build-firefox.bat`).
+
+Status (2026-09-28, v0.4.10): 18/18 on all three tablets; Windows Firefox under
+investigation (timed out during key seeding).
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "SSD â€” Signed, Sealed, Delivered",
+  "name": "SSD - Signed, Sealed, Delivered",
   "version": "0.4.10",
   "permissions": ["storage"],
   "host_permissions": [
