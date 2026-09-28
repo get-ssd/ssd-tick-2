@@ -2,3 +2,6 @@
 .claude/
 test/node_modules/
 dist/
+.venv/
+demo/runs/
+demo/tools/

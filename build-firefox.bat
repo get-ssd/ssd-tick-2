@@ -13,7 +13,7 @@ powershell -NoProfile -Command ^
   "Add-Type -Assembly 'System.IO.Compression'; " ^
   "$src = (Resolve-Path '.').Path; " ^
   "$dst = Join-Path $src 'dist\ssd-tick-firefox.xpi'; " ^
-  "$excludeTop = @('dist','.git','test'); " ^
+  "$excludeTop = @('dist','.git','test','demo','.venv'); " ^
   "$excludeNames = @('manifest-chrome.json','build-firefox.bat','build-chrome.bat','.gitignore'); " ^
   "$excludeRel = @('background\service-worker.js'); " ^
   "$fs = [System.IO.File]::Open($dst, [System.IO.FileMode]::Create); " ^
