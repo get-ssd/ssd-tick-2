@@ -21,10 +21,15 @@ Badges are `span.ssd-indicator[data-ssd-state]`. Each mock post also renders its
 expected verdict in a `.fb-expect` / `.x-expect` / `.rd-expect` / `.tg-expect` /
 `.wa-expect` tag, which the harness diffs against the real badge.
 
-**Keys must be in the keyring for VALID/MISMATCH.** Tokens use `fb:`/`x:`/`rd:`/
+Each post's text also says which badge it should get ("Alice's signed message,
+untouched. Shows VALID once Alice's key is added." etc.), so the expected state is
+obvious on screen.
+
+**Alice's key must be in the keyring for VALID.** Tokens use `fb:`/`x:`/`rd:`/
 `tg:`/`wa:` identity hints, and the service worker's `resolveIdentity()` does
-**not** auto-fetch for those — so Alice and Bob must be imported. Carol must
-never be imported; that is what makes her KEY_UNREACHABLE.
+**not** auto-fetch for those — so Alice must be imported. **Bob reads MISMATCH
+with or without his key**: the token's content hash shows the edit without the
+key. Carol must never be imported; that is what makes her KEY_UNREACHABLE.
 
 ---
 
@@ -83,37 +88,53 @@ browser left running keeps the old copy until reloaded.
 
 ---
 
-## Firefox / Android (Firefox Nightly on a phone)
-
-Release Firefox will not permanently install an unsigned xpi, and puppeteer's
-desktop-Firefox path does not get content scripts injected (MV3 host-permission
-model). The working route is `web-ext` onto **Firefox Nightly** over ADB.
-
-Prerequisites: USB debugging authorised on the phone; Nightly →
-**Settings → Remote debugging via USB → ON**.
+## Firefox — tablets (Nightly) and Windows
 
 ```
-adb reverse tcp:10117 tcp:10117     # phone's localhost:10117 → this PC's mock server
-npx web-ext run --target=firefox-android \
-  --android-device=<serial> \
-  --firefox-apk=org.mozilla.fenix \
-  --source-dir="<repo>/ssd.tick-2/dist/firefox-unpacked"
+# 1. mock server
+cd ../../socialmedia-mock && 00-startup.bat
+
+# 2. build, then run
+build-firefox.bat
+demo\run.bat                 # every tablet in demo/tablets.json, then Windows Firefox
+demo\run.bat --only android  # tablets only
+demo\run.bat --only firefox  # Windows Firefox only
 ```
 
-`dist/firefox-unpacked` is the built Firefox extension unzipped —
-`build-firefox.bat` refreshes it from the xpi on every build. Use it rather
-than the repo root, or web-ext will package `.git`, `node_modules` and `dist`.
+`demo/tick_run.py` drives Firefox over its Remote Debugging Protocol
+(`demo/firefox_rdp.py`): on the tablets via `adb forward` to Nightly's debugger
+socket (attaching to the Nightly already running in Android user 10), on Windows
+via `-start-debugger-server` on a throwaway profile. Tick is installed as a
+temporary add-on.
 
-**This installs a *temporary* add-on — it is removed when the `web-ext` session
-ends or Firefox restarts.** Keep that terminal open for the whole test.
+**Each run starts from an empty keyring.** Any previous Tick is uninstalled first
+(its storage goes with it), then on the Facebook feed:
 
-Then on the phone open `http://localhost:10117/social-mock/facebook`. A fresh
-profile has an empty keyring, so **every post reads KEY_UNREACHABLE** — that
-alone proves the content script runs on Gecko/Android. For VALID/MISMATCH,
-open `/social-mock/facebook/alice.mock` and `…/bob.mock` and tap the
-**"🔑 Add key"** beacon buttons, then reload.
+| Step | Alice | Bob | Carol |
+|---|---|---|---|
+| No keys | KEY_UNREACHABLE | MISMATCH | KEY_UNREACHABLE |
+| Follow Alice's link, tap "Add key", Back, refresh | VALID | MISMATCH | KEY_UNREACHABLE |
+| Follow Bob's link, tap "Add key", Back, refresh | VALID | MISMATCH | KEY_UNREACHABLE |
 
-Status: install confirmed working; on-device badge verification not completed.
+then the 18-badge pass over all five platforms.
+
+**Refresh after Back is deliberate.** On the tablets, Back restores the feed from
+the back/forward cache with the old badges; Tick does not re-verify on its own
+(kept light), so the user refreshes. The runner logs the pre-refresh badges but
+does not check them. (Windows Firefox 156 showed the new badges before the refresh.)
+
+Tablet prerequisites: Nightly installed for Android user 10, **Settings → Remote
+debugging via USB → ON**. The runner taps away Nightly's "<add-on> was added" notice.
+
+Last known-good (2026-09-28, Tick 0.4.11): 0 failures on SERIAL-1, SERIAL-2,
+SERIAL-3 and Windows Firefox 156 — walk-through plus 18/18 each.
+
+### Manual route (web-ext)
+
+`npx web-ext run --target=firefox-android --android-device=<serial>
+--firefox-apk=org.mozilla.fenix --source-dir=dist/firefox-unpacked` with
+`adb reverse tcp:10117 tcp:10117` also installs a temporary add-on, but it is
+removed when that terminal closes. The runner above replaces it.
 
 ---
 
@@ -131,7 +152,8 @@ Status: install confirmed working; on-device badge verification not completed.
 
 ## Files
 
-- `mock-verify.js` — the working harness (Brave/Chromium, all five platforms).
+- `mock-verify.js` — the Brave/Chromium harness (all five platforms).
+- `../demo/tick_run.py` — the Firefox runner (tablets + Windows), fresh-keyring walk-through.
 - `facebook-mock.js` — **superseded/non-functional**: built on the
   `--load-extension` throwaway-profile approach that current Chrome blocks.
   Kept for reference only; `mock-verify.js` replaces it.

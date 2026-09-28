@@ -187,8 +187,7 @@ away (uiautomator). Windows Firefox runs on a throwaway profile with the first-r
 data-choices/terms prompts disabled — those are browser-modal and stall the debugger.
 Logs go to `demo/runs/`. Build `dist/` first (`build-firefox.bat`).
 
-Status (2026-09-28, v0.4.11): fresh-keyring walk-through plus 18/18 on all three tablets
-(Windows Firefox last run at v0.4.10: 18/18).
+Status (2026-09-28, v0.4.11): fresh-keyring walk-through plus 18/18 on all three tablets and Windows Firefox 156.
 
 ---
 
