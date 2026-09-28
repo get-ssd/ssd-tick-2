@@ -19,6 +19,7 @@ current dist/ (build-firefox.bat), and on each tablet Nightly with
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -188,6 +189,25 @@ class Tablet:
         self.adb("forward", f"tcp:{self.port}", f"localabstract:{FENIX}/firefox-debugger-socket")
         log(f"{self.name}: Nightly up, debugger forwarded to :{self.port}")
 
+    def dismiss_added_notice(self, log):
+        """Nightly shows '<add-on> was added' with an OK button on every install;
+        they stack up across runs. Tap OK until none is left (read via uiautomator)."""
+        taps = 0
+        for _ in range(10):
+            self.adb("shell", "uiautomator dump /data/local/tmp/ui.xml", check=False)
+            xml = self.adb("exec-out", "cat /data/local/tmp/ui.xml", check=False)
+            if " was added" not in xml:
+                break
+            m = re.search(r'text="OK"[^>]*class="android\.widget\.Button"[^>]*bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"', xml)
+            if not m:
+                break
+            x1, y1, x2, y2 = map(int, m.groups())
+            self.adb("shell", f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+            taps += 1
+            time.sleep(0.8)
+        if taps:
+            log(f"{self.name}: dismissed {taps} 'was added' notice(s)")
+
     def release(self):
         self.adb("forward", "--remove", f"tcp:{self.port}", check=False)
 
@@ -202,6 +222,8 @@ def run_tablet(tablet, log):
     try:
         addon = rdp.install_temporary_addon(DEVICE_XPI)
         log(f"{tablet.name}: Tick installed ({addon.get('id')})")
+        time.sleep(1.5)  # let the notice appear before looking for it
+        tablet.dismiss_added_notice(log)
         s = Session(tablet.name, rdp, log)
         s.seed_keys()
         s.run_platforms()
@@ -217,15 +239,29 @@ def run_desktop_firefox(log, port=6099):
     if not os.path.exists(DESKTOP_FIREFOX):
         log.check(False, f"Windows Firefox: not found at {DESKTOP_FIREFOX}")
         return
+    try:
+        RDP(port, timeout=2).close()
+        log.check(False, f"Windows Firefox: something already answers on :{port} — a Firefox left from an earlier run? Close it first")
+        return
+    except OSError:
+        pass
     profile = tempfile.mkdtemp(prefix="tick-ff-")
     with open(os.path.join(profile, "user.js"), "w", encoding="utf-8") as f:
         for k, v in {"devtools.debugger.remote-enabled": True, "devtools.chrome.enabled": True,
                      "devtools.debugger.prompt-connection": False, "browser.shell.checkDefaultBrowser": False,
                      "browser.aboutwelcome.enabled": False, "datareporting.policy.dataSubmissionEnabled": False,
-                     "browser.startup.homepage_override.mstone": "ignore"}.items():
+                     "browser.startup.homepage_override.mstone": "ignore",
+                     # First-run data-choices / terms / onboarding prompts are browser-modal:
+                     # while one is up the debugger's root actor stops answering.
+                     "datareporting.policy.dataSubmissionPolicyBypassNotification": True,
+                     "toolkit.telemetry.reportingpolicy.firstRun": False,
+                     "browser.preonboarding.enabled": False,
+                     "termsofuse.bypassNotification": True,
+                     "trailhead.firstrun.didSeeAboutWelcome": True,
+                     "browser.startup.firstrunSkipsHomepage": True}.items():
             f.write(f'user_pref("{k}", {json.dumps(v)});\n')
     proc = subprocess.Popen([DESKTOP_FIREFOX, "-no-remote", "-profile", profile,
-                             "-start-debugger-server", str(port), "about:blank"])
+                             "-start-debugger-server", str(port), f"{BASE}/facebook"])
     rdp = None
     try:
         for _ in range(40):
@@ -247,12 +283,19 @@ def run_desktop_firefox(log, port=6099):
     finally:
         if rdp:
             rdp.close()
-        proc.terminate()
-        try:
-            proc.wait(10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        stop_firefox(proc, profile)
         shutil.rmtree(profile, ignore_errors=True)
+
+
+def stop_firefox(proc, profile):
+    """firefox.exe hands off to a child and exits, so killing proc alone leaves
+    the real browser running. Kill every process launched with this profile."""
+    proc.kill()
+    ps = ("Get-CimInstance Win32_Process -Filter \"Name='firefox.exe'\" | "
+          f"Where-Object {{ $_.CommandLine -like '*{os.path.basename(profile)}*' }} | "
+          "ForEach-Object { taskkill /PID $_.ProcessId /T /F | Out-Null }")
+    subprocess.run(["powershell", "-NoProfile", "-Command", ps], capture_output=True)
+    time.sleep(1)  # let Windows release the profile files before rmtree
 
 
 # ── Windows Chromium (existing harness) ───────────────────────────────────────
