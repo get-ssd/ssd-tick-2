@@ -176,8 +176,12 @@ const facebook = {
   function readPostText(textNode, tokenRaw) {
     let el = textNode.parentElement;
     while (el && el !== document.body) {
-      const full = el.innerText || '';
-      const idx = full.lastIndexOf(tokenRaw);
+      // extractText keeps blank-line paragraph breaks (outer div → \n\n), which
+      // innerText flattens to \n on www.facebook.com. innerText is the fallback
+      // if the token cannot be located in the extracted text.
+      let full = extractText(el);
+      let idx = full.lastIndexOf(tokenRaw);
+      if (idx < 10) { full = el.innerText || ''; idx = full.lastIndexOf(tokenRaw); }
       if (idx >= 10) {
         const pre = full.slice(0, idx).trim();
         console.debug('[SSD:readPost]', el.nodeName, 'pre-token:', pre.length,
