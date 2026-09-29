@@ -8,7 +8,11 @@
 // there — the beacon is parenthesised: (SSDKEY:...). Both forms parse.
 // SHA-256 self-consistency (hash8 == first 8 hex chars of SHA-256(pubkey_bytes))
 // is NOT checked here — it requires async crypto and is done by the handler.
+// Mobile Facebook wraps bio text to the viewport server-side, inserting literal
+// newlines into the beacon (portrait: after the '-' in the pubkey). No beacon
+// field can contain whitespace, so it is stripped before validation.
 function parseKeyBeacon(raw) {
+  raw = raw.replace(/\s+/g, '');
   const bracketed = raw.startsWith('[SSDKEY:') && raw.endsWith(']');
   const parenned  = raw.startsWith('(SSDKEY:') && raw.endsWith(')');
   if (!bracketed && !parenned) return null;
@@ -191,6 +195,16 @@ const textScanner = {
       return node.parentElement || node.parentNode || document.body;
     }
 
+    // If the beacon text sits inside a tappable host element (m.facebook.com
+    // wraps the bio in role="button" — on your own profile a tap opens "edit
+    // bio"), a button inside it never gets the tap. Place it after that element.
+    function placeButton(btn, anchorNode, parent) {
+      const start    = anchorNode.parentElement;
+      const tappable = start && start.closest('[role="button"], a[href]');
+      if (tappable && tappable.parentNode) tappable.after(btn);
+      else parent.appendChild(btn);
+    }
+
     return function handleKeyBeacon(hash8, pubkey, anchorNode) {
       // Document-level dedup: allows re-injection if the host page removes the
       // button (e.g. React re-render), while still preventing duplicates when
@@ -205,6 +219,8 @@ const textScanner = {
 
       const btn = document.createElement('button');
       btn.className     = 'ssd-key-beacon ssd-indicator';
+      // Inline !important: m.facebook.com's pointer-events:none rule outranks styles.css.
+      btn.style.setProperty('pointer-events', 'auto', 'important');
       btn.dataset.hash8 = hash8;
 
       // Known, same key — informational only; no action needed.
@@ -213,7 +229,7 @@ const textScanner = {
         btn.textContent = `🔑 Key known (${hash8})`;
         btn.disabled    = true;
         btn.title       = `SSD key ${hash8} is already in your keyring`;
-        parent.appendChild(btn);
+        placeButton(btn, anchorNode, parent);
         return;
       }
 
@@ -223,7 +239,7 @@ const textScanner = {
         btn.textContent = `🔑 Key conflict — remove existing first (${hash8})`;
         btn.title       = `SSD — a different key for ${hash8} is already in your keyring. Remove it via the popup before adding this one.`;
         btn.disabled    = true;
-        parent.appendChild(btn);
+        placeButton(btn, anchorNode, parent);
         return;
       }
 
@@ -231,9 +247,13 @@ const textScanner = {
       btn.textContent = `🔑 Add key (${hash8})`;
       btn.title       = `SSD key beacon — click to add signer ${hash8} to your keyring`;
 
-      btn.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); }, { passive: false });
-      btn.addEventListener('click', async (e) => {
+      // On m.facebook.com (Firefox Android) a tap delivers only pointerdown/pointerup
+      // to the button: no touch events and no click. Touch/pen taps therefore run
+      // the import from pointerup; mouse keeps click. The disabled check in
+      // onActivate stops a double import where both fire.
+      const onActivate = async (e) => {
         e.stopPropagation();
+        if (btn.disabled) return;
         btn.disabled    = true;
         btn.textContent = 'Verifying…';
 
@@ -265,9 +285,11 @@ const textScanner = {
           btn.disabled         = true;
           console.error('[SSD] beacon import failed', err);
         }
-      });
+      };
+      btn.addEventListener('click', onActivate);
+      btn.addEventListener('pointerup', (e) => { if (e.pointerType !== 'mouse') onActivate(e); });
 
-      parent.appendChild(btn);
+      placeButton(btn, anchorNode, parent);
     };
   },
 };

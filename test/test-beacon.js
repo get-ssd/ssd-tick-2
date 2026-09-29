@@ -39,6 +39,15 @@ console.log('\nparseKeyBeacon');
   assert('pubkey correct',           r && r.pubkey === VALID_PUBKEY);
 }
 
+{
+  // m.facebook.com portrait: server-side wrap puts a newline inside the pubkey.
+  const r = parseKeyBeacon(`[SSDKEY:${VALID_HASH8}:${VALID_PUBKEY.slice(0, 20)}\n${VALID_PUBKEY.slice(20)}]`);
+  assert('line-wrapped beacon parses', r !== null && r.pubkey === VALID_PUBKEY);
+  SSDKEY_PATTERN.lastIndex = 0;
+  const m = SSDKEY_PATTERN.exec(`bio [SSDKEY:${VALID_HASH8}:${VALID_PUBKEY.slice(0, 8)}-\n${VALID_PUBKEY.slice(8)}] more`);
+  assert('pattern spans the wrap', m !== null && m[0].includes('\n'));
+}
+
 assert('rejects wrong hash8 length',    parseKeyBeacon('[SSDKEY:ABCDE:' + VALID_PUBKEY + ']') === null);
 assert('rejects lowercase hash8',       parseKeyBeacon('[SSDKEY:8588fecc:' + VALID_PUBKEY + ']') === null);
 assert('rejects pubkey < 43 chars',     parseKeyBeacon('[SSDKEY:' + VALID_HASH8 + ':shortkey]') === null);

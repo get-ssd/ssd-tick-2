@@ -161,6 +161,14 @@
   font-weight: 600;
   padding: 1px 7px 1px 5px;
 }
+/* Own line: appended inline after a long beacon it overflows the viewport on
+   narrow (portrait) mobile screens, leaving only the key emoji visible. */
+.ssd-indicator.ssd-key-beacon {
+  display: flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 4px 0 0 0;
+}
 .ssd-key-beacon:disabled { opacity: 0.6; cursor: default; }
 .ssd-key-beacon[data-ssd-state="KEY_BEACON_DONE"]      { --ssd-colour: #4caf77; }
 .ssd-key-beacon[data-ssd-state="KEY_BEACON_KNOWN"]     { --ssd-colour: #4caf77; }
