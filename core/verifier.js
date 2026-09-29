@@ -204,9 +204,15 @@ const verifier = {
   // content8 prefix matches expectedContent8. Returns null if none match (or if
   // expectedContent8 is absent, returns the as-is result immediately).
   async _canonWithGuesses(rawText, expectedContent8) {
+    // m.facebook.com wraps prose server-side at the viewport width with literal
+    // \n. Re-flowing single line breaks lets canonicalise re-wrap at 80; blank-
+    // line paragraph breaks are kept. Only words' layout can differ, not words.
+    const soft = /(?<!\n)[ \t]*\n(?!\n)/g;
     const variants = [
       rawText,                           // 1. as-is (extraction matched signed text)
       rawText.replace(/\n{2,}/g, '\n'), // 2. collapse blank lines (some views strip them)
+      rawText.replace(soft, ' '),       // 3. re-flow viewport-wrapped lines
+      rawText.replace(/(?<!\n)-\n(?!\n)/g, '-').replace(soft, ' '), // 4. as 3, break after '-' was mid-word
     ];
     for (const v of variants) {
       const result = await canon.canonicalise(v);
