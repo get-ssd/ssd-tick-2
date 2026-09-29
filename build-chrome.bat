@@ -12,7 +12,7 @@ mkdir "%OUT%"
 powershell -NoProfile -Command ^
   "$src = Resolve-Path '.'; " ^
   "$dst = Join-Path $src 'dist\chrome'; " ^
-  "$excludes = @('dist','demo','.venv','manifest.json','manifest-chrome.json','build-firefox.bat','build-chrome.bat','.git','.gitignore','background\background.js'); " ^
+  "$excludes = @('dist','demo','test','.devmode','.venv','manifest.json','manifest-chrome.json','build-firefox.bat','build-chrome.bat','.git','.gitignore','background\background.js'); " ^
   "Copy-Item (Join-Path $src 'manifest-chrome.json') (Join-Path $dst 'manifest.json'); " ^
   "Get-ChildItem -Path $src -Recurse | Where-Object { " ^
   "  $rel = $_.FullName.Substring($src.Path.Length+1); " ^
