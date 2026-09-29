@@ -30,7 +30,11 @@ const tokenParser = {
     const trimmed = tokenString.trim();
     if (!trimmed.startsWith('[SSD:') || !trimmed.endsWith(']')) return null;
 
-    const inner = trimmed.slice(5, -1);
+    // m.facebook.com wraps long unbroken strings server-side, inserting literal
+    // newlines inside the token (mostly the signature). No field can contain
+    // whitespace, so parse a compacted copy. raw keeps the page text as found:
+    // readPostText locates the token in innerText by it.
+    const inner = trimmed.replace(/\s+/g, '').slice(5, -1);
     const parts = inner.split(':');
     const n = parts.length;
 
