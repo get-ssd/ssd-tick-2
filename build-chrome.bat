@@ -1,8 +1,9 @@
 @echo off
 :: Builds the Chrome shell into an unpacked folder for chrome://extensions Developer mode.
 :: Output: dist\chrome\  (load this folder via "Load unpacked")
-:: Usage: run from ssd-tick-2\
+:: Runs from its own folder wherever it is started.
 
+cd /d "%~dp0"
 if not exist dist mkdir dist
 set OUT=dist\chrome
 if exist "%OUT%" rmdir /s /q "%OUT%"

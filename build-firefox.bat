@@ -1,9 +1,10 @@
 @echo off
 :: Packages the Firefox shell into an .xpi for side-loading on Firefox for Android.
 :: Output: dist\ssd-tick-firefox.xpi and dist\firefox-unpacked\ (for web-ext)
-:: Usage: run from ssd-tick-2\
+:: Runs from its own folder wherever it is started.
 :: Note: uses ZipArchive.CreateEntry to ensure forward-slash paths (required by Firefox).
 
+cd /d "%~dp0"
 if not exist dist mkdir dist
 set OUT=dist\ssd-tick-firefox.xpi
 if exist "%OUT%" del "%OUT%"
