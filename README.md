@@ -5,7 +5,7 @@ Browser extension that detects and verifies SSD-signed posts on social media. Wh
 - **Firefox** (all platforms, including Firefox for Android) — primary delivery target
 - **Chrome** (desktop only — Chrome for Android does not support extensions)
 
-Current version: **0.4.12**
+Current version: **0.4.19**
 
 ---
 
@@ -117,6 +117,8 @@ Click any badge to open the in-page popup with signer name, hash8, and timestamp
 | Facebook (`www.facebook.com`, `m.facebook.com`) | Verified working | Inline body token |
 | Reddit (`www.reddit.com`, `old.reddit.com`) | Untested | Inline body token |
 | Localhost test pages (any port) | Working | Inline, via test bootstrap or path-scoped platform modules |
+
+**m.facebook.com note (0.4.16–0.4.19, verified 2026-09-29 on Firefox Nightly, Android phone):** the server wraps text to the viewport with literal newlines, inside `[SSD:]`/`[SSDKEY:]` tokens and in prose. Tokens are parsed whitespace-free and the verifier re-flows single line breaks before re-wrapping at 80. The page sets `pointer-events:none` and delivers only pointer events on tap, so the "Add key" button forces `pointer-events` and imports on `pointerup`. Posts and bios truncated at "…See more" get no badge until expanded.
 
 **Twitter note:** The primary delivery method is a self-reply — the author posts the clean tweet, then immediately replies to themselves with the `—SSD·…—` token. Tick links the reply back to the parent tweet and badges the parent. Inline body tokens also work (backwards compat).
 
