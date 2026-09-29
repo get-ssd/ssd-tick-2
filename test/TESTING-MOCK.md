@@ -125,9 +125,12 @@ does not check them. (Windows Firefox 156 showed the new badges before the refre
 
 Tablet prerequisites: Nightly installed for Android user 10, **Settings → Remote
 debugging via USB → ON**. The runner taps away Nightly's "<add-on> was added" notice.
+Devices are listed in `demo/tablets.json` (not committed — copy
+`demo/tablets.example.json` and fill in the serials). If Nightly is also installed
+for another Android user, stop it there first: both share the debugger socket name.
 
-Last known-good (2026-09-28, Tick 0.4.11): 0 failures on SERIAL-1, SERIAL-2,
-SERIAL-3 and Windows Firefox 156 — walk-through plus 18/18 each.
+Last known-good (2026-09-29, Tick 0.4.14): 0 failures on three tablets and a phone —
+walk-through plus 18/18 each. Windows Firefox 156 last passed at 0.4.11.
 
 ### Manual route (web-ext)
 

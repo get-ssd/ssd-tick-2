@@ -1,0 +1,10 @@
+{
+  "android_user": 10,
+  "rdp_base_port": 6010,
+  "tablets": [
+    { "name": "Tab-1", "serial": "SERIAL-1" },
+    { "name": "Tab-2", "serial": "SERIAL-2" },
+    { "name": "Tab-3", "serial": "SERIAL-3" },
+    { "name": "Phone", "serial": "SERIAL-4" }
+  ]
+}

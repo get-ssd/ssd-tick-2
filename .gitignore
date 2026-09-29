@@ -5,3 +5,4 @@ dist/
 .venv/
 demo/runs/
 __pycache__/
+demo/tablets.json

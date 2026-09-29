@@ -4,7 +4,7 @@
     py demo/tick_run.py --only android     # tablets only
     py demo/tick_run.py --only firefox     # Windows Firefox only
     py demo/tick_run.py --chromium         # also run test/mock-verify.js on Chromium (close Chromium first)
-    py demo/tick_run.py --serial SERIAL-1  # one tablet
+    py demo/tick_run.py --serial SERIAL-1   # one tablet
 
 Firefox (tablet and desktop) is driven over the Remote Debugging Protocol
 (firefox_rdp.py): Tick is installed as a temporary add-on, any previous install is
@@ -374,7 +374,10 @@ def main():
     if not os.path.exists(XPI):
         raise SystemExit("dist/ssd-tick-firefox.xpi missing — run build-firefox.bat")
 
-    with open(os.path.join(HERE, "tablets.json"), encoding="utf-8") as f:
+    cfg_path = os.path.join(HERE, "tablets.json")
+    if not os.path.exists(cfg_path):
+        raise SystemExit("demo/tablets.json missing — copy tablets.example.json and fill in your device serials")
+    with open(cfg_path, encoding="utf-8") as f:
         cfg = json.load(f)
     tablets = [Tablet(t["serial"], t["name"], cfg.get("android_user", 10), cfg.get("rdp_base_port", 6010) + i)
                for i, t in enumerate(cfg["tablets"]) if not args.serial or t["serial"] == args.serial]
