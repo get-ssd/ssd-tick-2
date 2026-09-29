@@ -4,6 +4,7 @@
   "tablets": [
     { "name": "Tab-1Z", "serial": "SERIAL-1" },
     { "name": "Tab-37", "serial": "SERIAL-2" },
-    { "name": "Tab-T500", "serial": "SERIAL-3" }
+    { "name": "Tab-T500", "serial": "SERIAL-3" },
+    { "name": "Phone-T803", "serial": "SERIAL-4" }
   ]
 }
