@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SSD - Signed, Sealed, Delivered",
-  "version": "0.4.19",
+  "version": "0.4.20",
   "permissions": ["storage"],
   "host_permissions": [
     "https://www.facebook.com/*",
@@ -10,6 +10,7 @@
     "https://old.reddit.com/*",
     "https://twitter.com/*",
     "https://x.com/*",
+    "https://get-ssd.github.io/*",
     "https://idltd.github.io/*",
     "http://localhost/*",
     "http://127.0.0.1/*",
