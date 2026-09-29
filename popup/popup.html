@@ -193,6 +193,14 @@
   }
   #import-btn:hover { opacity: 0.88; }
 
+  #owner-section {
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  #owner-info { font-size: 12px; color: var(--text-muted); }
+  #owner-info .fp { font-family: var(--mono); }
+
+  #owner-import-btn,
   #share-import-btn,
   #share-export-btn {
     margin-top: 6px;
@@ -206,6 +214,7 @@
     font-size: 12px;
     cursor: pointer;
   }
+  #owner-import-btn:hover,
   #share-import-btn:hover,
   #share-export-btn:hover { border-color: var(--primary); background: #c8a96e18; }
 
@@ -224,6 +233,12 @@
   <span class="brand">SSD Tick</span>
   <span id="key-count">0 keys</span>
   <button id="open-pwa-btn" title="Open SSD to sign a post">Open SSD</button>
+</div>
+
+<div id="owner-section">
+  <div class="section-title">My key</div>
+  <div id="owner-info">Not set — import your own SSD key share first.</div>
+  <button id="owner-import-btn">Import my key (.ssd share)…</button>
 </div>
 
 <div id="key-list"></div>

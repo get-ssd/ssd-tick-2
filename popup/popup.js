@@ -16,6 +16,17 @@ async function saveKeystore(ks) {
   await ext.storage.local.set({ keystore: ks });
 }
 
+// The Tick user's own public key, set from their own SSD key share. Exports
+// name it so SSD only takes unsigned shares from its owner's Tick.
+async function getOwner() {
+  const data = await ext.storage.local.get('owner');
+  return data.owner || null;
+}
+
+async function saveOwner(owner) {
+  await ext.storage.local.set({ owner });
+}
+
 function b64ToBytes(b64) {
   let s = b64.replace(/-/g, '+').replace(/_/g, '/');
   while (s.length % 4) s += '=';
@@ -124,6 +135,8 @@ function _zipSSD(files) {
 
 // Build and download an unsigned .ssd key share from the current keystore.
 async function exportKeyShare() {
+  const owner = await getOwner();
+  if (!owner) throw new Error('Import your own SSD key share first (My key).');
   const ks = await getKeystore();
   const entries = Object.values(ks);
 
@@ -132,6 +145,7 @@ async function exportKeyShare() {
     signing_pub_b64: null,
     hash8: null,
     key_name: null,
+    owner_hash8: owner.hash8,
     contacts: entries.map(k => ({
       hash8: k.hash8,
       public_key_b64: k.public_key,
@@ -387,6 +401,15 @@ function renderKeys(ks) {
   });
 }
 
+function renderOwner(owner) {
+  const el = document.getElementById('owner-info');
+  el.innerHTML = owner
+    ? `${esc(owner.name || owner.hash8)} · <span class="fp">${esc(owner.hash8)}</span>`
+    : 'Not set — import your own SSD key share first.';
+  document.getElementById('owner-import-btn').textContent =
+    owner ? 'Replace my key (.ssd share)…' : 'Import my key (.ssd share)…';
+}
+
 function showMessage(text, isError) {
   const el = document.getElementById('message');
   el.textContent = text;
@@ -409,6 +432,7 @@ async function savePwaUrl(raw) {
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderKeys(await getKeystore());
+  renderOwner(await getOwner());
 
   // Populate the URL input from storage on open.
   const stored = await ext.storage.local.get('pwaUrl');
@@ -454,7 +478,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
+  // One file input serves both buttons; the mode says whether the share is the owner's.
+  let shareImportIsOwner = false;
+  document.getElementById('owner-import-btn').addEventListener('click', () => {
+    shareImportIsOwner = true;
+    document.getElementById('share-file-input').click();
+  });
   document.getElementById('share-import-btn').addEventListener('click', () => {
+    shareImportIsOwner = false;
     document.getElementById('share-file-input').click();
   });
 
@@ -497,7 +528,13 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       await saveKeystore(ks);
-      showMessage(`Share imported: ${added} new, ${skipped} already known`, false);
+      if (shareImportIsOwner) {
+        const owner = { hash8: content.hash8, name: content.key_name, public_key: content.signing_pub_b64 };
+        await saveOwner(owner);
+        renderOwner(owner);
+      }
+      showMessage(`Share imported: ${added} new, ${skipped} already known`
+        + (shareImportIsOwner ? ` · my key set to ${content.hash8}` : ''), false);
       renderKeys(ks);
     } catch (e) {
       showMessage(e.message, true);
