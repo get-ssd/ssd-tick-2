@@ -83,7 +83,7 @@ const verificationPopup = {
             <strong>~ Signer's key not in your keyring</strong>
             ${url
               ? `<div style="margin-top:6px"><a href="${this.esc(url)}" target="_blank" rel="noopener" class="ssd-pop-link">${this.esc(action)}</a></div>
-                 <div style="margin-top:4px;font-size:11px;opacity:.7">Look for the 🔑 Trust key button on their profile, then reload this page.</div>`
+                 <div style="margin-top:4px;font-size:11px;opacity:.7">Look for the 🔑 Add key button on their profile, then reload this page.</div>`
               : '<div>Import their key card to verify this post.</div>'
             }
           </div>`;
