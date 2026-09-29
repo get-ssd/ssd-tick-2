@@ -151,6 +151,7 @@ async function exportKeyShare() {
       public_key_b64: k.public_key,
       name: k.name,
       source: k.source || null,
+      identity: k.identity || null,
     })),
   };
 
@@ -508,7 +509,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       let added = 0, skipped = 0;
       const now = new Date().toISOString();
 
-      const mergeKey = (hash8, pubB64, name) => {
+      const mergeKey = (hash8, pubB64, name, prov) => {
         if (ks[hash8]) { skipped++; return; }
         ks[hash8] = {
           hash8, name: name || hash8,
@@ -518,13 +519,21 @@ document.addEventListener('DOMContentLoaded', async () => {
           imported_at: now, source: 'direct',
           vouched_by: null, bundle_name: null,
           credibility: null, vault: null, token_default: null,
+          ...prov,
         };
         added++;
       };
 
-      mergeKey(content.hash8, content.signing_pub_b64, content.key_name);
+      // The sharer's own key was imported directly. Their contacts keep the
+      // provenance they carry; without it they are keys from the sharer's list.
+      mergeKey(content.hash8, content.signing_pub_b64, content.key_name, {});
       for (const c of (content.contacts ?? [])) {
-        if (c.hash8 && c.public_key_b64) mergeKey(c.hash8, c.public_key_b64, c.name ?? c.hash8);
+        if (!c.hash8 || !c.public_key_b64) continue;
+        const prov = c.source
+          ? { source: c.source, ...(c.identity ? { identity: c.identity } : {}) }
+          : { source: 'bundle', vouched_by: content.hash8, bundle_name: content.key_name ?? null,
+              ...(c.identity ? { identity: c.identity } : {}) };
+        mergeKey(c.hash8, c.public_key_b64, c.name ?? c.hash8, prov);
       }
 
       await saveKeystore(ks);
