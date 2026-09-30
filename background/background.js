@@ -129,11 +129,6 @@ async function resolveIdentity(identity) {
 // ── message handling ─────────────────────────────────────────────────────────
 
 ext.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
-  if (msg && msg.type === 'getPwaUrl') {
-    getPwaUrl().then(url => sendResponse({ url }));
-    return true;
-  }
-
   if (msg && msg.type === 'analyserLog') {
     (async () => {
       try {
