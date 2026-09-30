@@ -25,11 +25,12 @@ powershell -NoProfile -Command ^
   "  else { New-Item -ItemType File -Force $dest | Out-Null; Copy-Item $_.FullName $dest } " ^
   "}"
 
-:: test/ is excluded above. With .devmode present, copy it back so the localhost
+:: test/ is excluded above. With .devmode present, copy back just bootstrap.js so the localhost
 :: test bootstrap works; otherwise drop the content scripts that reference it,
 :: or Chrome refuses to load the unpacked extension.
 if exist .devmode (
-  xcopy /e /i /q test "%OUT%\test" >nul
+  mkdir "%OUT%\test"
+  copy /y test\bootstrap.js "%OUT%\test\" >nul
 ) else (
   powershell -NoProfile -Command ^
     "$p = Join-Path (Resolve-Path '.') 'dist\chrome\manifest.json'; " ^
