@@ -25,6 +25,19 @@ powershell -NoProfile -Command ^
   "  else { New-Item -ItemType File -Force $dest | Out-Null; Copy-Item $_.FullName $dest } " ^
   "}"
 
+:: test/ is excluded above. With .devmode present, copy it back so the localhost
+:: test bootstrap works; otherwise drop the content scripts that reference it,
+:: or Chrome refuses to load the unpacked extension.
+if exist .devmode (
+  xcopy /e /i /q test "%OUT%\test" >nul
+) else (
+  powershell -NoProfile -Command ^
+    "$p = Join-Path (Resolve-Path '.') 'dist\chrome\manifest.json'; " ^
+    "$m = Get-Content $p -Raw | ConvertFrom-Json; " ^
+    "$m.content_scripts = @($m.content_scripts | Where-Object { -not ($_.js | Where-Object { $_ -like 'test/*' }) }); " ^
+    "[IO.File]::WriteAllText($p, ($m | ConvertTo-Json -Depth 10))"
+)
+
 if exist "%OUT%\manifest.json" (
   echo Built: %OUT%
 ) else (
