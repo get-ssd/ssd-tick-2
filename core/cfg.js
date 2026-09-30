@@ -15,6 +15,7 @@ const CFG = {
   analyserCollectorUrl: 'http://localhost:8099/log',
   maxAncestorDepth:     6,
   maxSuffixBlocks:      10,
+  defaultPwaUrl:        'https://get-ssd.github.io/SignedSealedDelivered',
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CFG;

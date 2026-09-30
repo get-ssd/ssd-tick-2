@@ -7,6 +7,9 @@
 
 const ext = globalThis.browser ?? globalThis.chrome;
 
+// Keep in sync with CFG.defaultPwaUrl in core/cfg.js (not loaded by this page).
+const DEFAULT_PWA_URL = 'https://get-ssd.github.io/SignedSealedDelivered';
+
 async function getKeystore() {
   const data = await ext.storage.local.get('keystore');
   return data.keystore || {};
@@ -440,19 +443,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   const urlInput = document.getElementById('pwa-url-input');
   if (urlInput && stored.pwaUrl) urlInput.value = stored.pwaUrl;
 
-  // Open SSD button — always visible; if no URL saved, scroll to the setting.
+  // Open SSD button — opens the saved URL, or the public app if none is saved.
   document.getElementById('open-pwa-btn').addEventListener('click', async () => {
     const data = await ext.storage.local.get('pwaUrl');
-    if (data.pwaUrl) {
-      ext.tabs.create({ url: data.pwaUrl });
-    } else {
-      const section = document.getElementById('pwa-section');
-      if (section) {
-        section.scrollIntoView({ behavior: 'smooth' });
-        section.style.outline = '1px solid var(--primary)';
-        setTimeout(() => { section.style.outline = ''; }, 1500);
-      }
-    }
+    ext.tabs.create({ url: data.pwaUrl || DEFAULT_PWA_URL });
   });
 
   // Save on button click or on blur (auto-save when user leaves the field).

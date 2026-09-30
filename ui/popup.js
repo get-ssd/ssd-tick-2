@@ -126,7 +126,7 @@ const verificationPopup = {
     this.remove();
 
     const stored = await ext.storage.local.get('pwaUrl');
-    const pwaUrl = stored.pwaUrl ? stored.pwaUrl.replace(/\/+$/, '') : null;
+    const pwaUrl = (stored.pwaUrl || CFG.defaultPwaUrl).replace(/\/+$/, '');
 
     const rect = anchorEl.getBoundingClientRect();
     const el = document.createElement('div');
@@ -156,7 +156,7 @@ const verificationPopup = {
         <div class="ssd-popup-row"><span>Vault</span><span>${this.esc(vaultLine)}</span></div>` : ''}
       </div>` : ''}
       <div class="ssd-popup-actions">
-        ${pwaUrl ? `<button class="ssd-popup-btn" data-act="open">Open in SSD</button>` : ''}
+        <button class="ssd-popup-btn" data-act="open">Open SSD…</button>
       </div>
     `;
 
