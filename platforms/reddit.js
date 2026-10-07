@@ -86,13 +86,22 @@ const reddit = {
   // collapsed the way CSS `white-space: normal` does: whitespace runs become a
   // single space, dropped at line starts and before block breaks. <pre> is
   // kept verbatim.
-  function extractText(el, inPre = false) {
+  // The rendered candidate stays first. A second candidate preserves internal
+  // spaces/tabs from the DOM, removing only newline-based HTML indentation.
+  // content8 selects a candidate; the verifier still checks its full signature.
+  function extractText(el, inPre = false, preserveSpaces = false) {
     let out = '';
     for (const node of el.childNodes) {
       if (node.nodeType === Node.TEXT_NODE) {
         if (inPre) { out += node.nodeValue; continue; }
-        let t = node.nodeValue.replace(/[ \t\n\r\f]+/g, ' ');
-        if (out === '' || out.endsWith('\n') || out.endsWith(' ')) t = t.replace(/^ /, '');
+        let t = node.nodeValue;
+        if (preserveSpaces) {
+          if (out === '' || out.endsWith('\n')) t = t.replace(/^[ \t]*[\n\r\f][ \t\n\r\f]*/, '');
+          t = t.replace(/[ \t]*[\n\r\f][ \t\n\r\f]*/g, ' ');
+        } else {
+          t = t.replace(/[ \t\n\r\f]+/g, ' ');
+          if (out === '' || out.endsWith('\n') || out.endsWith(' ')) t = t.replace(/^ /, '');
+        }
         out += t;
       } else if (node.nodeName === 'BR') {
         if (!inPre) out = out.replace(/ +$/, '');
@@ -101,7 +110,7 @@ const reddit = {
         const tag = node.nodeName;
         if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'NOSCRIPT') continue;
         const pre = inPre || tag === 'PRE';
-        let inner = extractText(node, pre);
+        let inner = extractText(node, pre, preserveSpaces);
         if (BLOCK_TAGS.has(tag) && !pre) inner = inner.replace(/ +$/, '');
         if (BLOCK_TAGS.has(tag) && inner !== '') {
           if (!inPre) out = out.replace(/ +$/, '');
@@ -111,7 +120,7 @@ const reddit = {
           if (!out.endsWith('\n')) out += '\n';
           if (!out.endsWith('\n\n')) out += '\n';
         } else {
-          if (!pre && (out === '' || out.endsWith('\n') || out.endsWith(' '))) inner = inner.replace(/^ /, '');
+          if (!pre && !preserveSpaces && (out === '' || out.endsWith('\n') || out.endsWith(' '))) inner = inner.replace(/^ /, '');
           out += inner;
         }
       }
@@ -119,7 +128,7 @@ const reddit = {
     return out;
   }
 
-  function readPostText(textNode, tokenRaw) {
+  function readPostTexts(textNode, tokenRaw) {
     let el = textNode.parentElement;
     while (el && el !== document.body) {
       const full = extractText(el);
@@ -128,12 +137,15 @@ const reddit = {
         const pre = full.slice(0, idx).trim();
         console.debug('[SSD:readPost]', el.nodeName, 'pre-token:', pre.length,
           '»', pre.slice(0, 60).replace(/\n/g, '↵'));
-        return pre;
+        const preserved = extractText(el, false, true);
+        const preservedIdx = preserved.lastIndexOf(tokenRaw);
+        const candidates = preservedIdx >= 0 ? [preserved.slice(0, preservedIdx).trim()] : [];
+        return { rawPostText: pre, candidates };
       }
       el = el.parentElement;
     }
     console.debug('[SSD:readPost] no container found');
-    return '';
+    return { rawPostText: '', candidates: [] };
   }
 
   // [SSDKEY:] beacon handler — three import states per SPEC-PROTO §5.7.
@@ -164,13 +176,15 @@ const reddit = {
       const jobs = [];
       textScanner.scan(
         (textNode, parsedToken, commit) => {
-          const rawPostText = parsedToken ? readPostText(textNode, parsedToken.raw) : '';
-          jobs.push({ textNode, parsedToken, commit, rawPostText });
+          const { rawPostText, candidates } = parsedToken
+            ? readPostTexts(textNode, parsedToken.raw)
+            : { rawPostText: '', candidates: [] };
+          jobs.push({ textNode, parsedToken, commit, rawPostText, candidates });
         },
         handleKeyBeacon
       );
       console.debug('[SSD:reddit] scan complete, jobs:', jobs.length);
-      for (const { textNode, parsedToken, commit, rawPostText } of jobs) {
+      for (const { textNode, parsedToken, commit, rawPostText, candidates } of jobs) {
         const scanningEl = badge.create({
           state: 'SCANNING',
           hash8:    parsedToken ? parsedToken.hash8    : null,
@@ -191,7 +205,7 @@ const reddit = {
         console.debug('[SSD:reddit] rawPostText length:', rawPostText.length, 'preview:', rawPostText.slice(0, 80).replace(/\n/g, '↵'));
         let result;
         try {
-          result = await verifier.verify(parsedToken.raw, rawPostText);
+          result = await verifier.verify(parsedToken.raw, rawPostText, candidates);
         } catch (err) {
           console.error('[SSD] verify failed', err);
           result = {

@@ -45,7 +45,8 @@ const verifier = {
   //   tokenString — the raw [SSD:…] token text
   //   rawPostText — the full text of the post (including the token); canon
   //                 splits off the token itself.
-  async verify(tokenString, rawPostText) {
+  // alternativeTexts are platform extraction candidates, selected by content8.
+  async verify(tokenString, rawPostText, alternativeTexts = []) {
     const parsed = tokenParser.parse(tokenString);
     if (!parsed) {
       return this._result('INVALID', null);
@@ -71,12 +72,12 @@ const verifier = {
     }
 
     // Canonicalise using content8-guided guessing.
-    // _canonWithGuesses tries a few line-break normalisations cheaply; content8
+    // _canonWithGuesses tries extraction and line-break candidates; content8
     // (first 8 hex chars of SHA-256) identifies which one was signed.
     // Returns null when content8 is present but none of the guesses match.
-    const canonResult = await this._canonWithGuesses(rawPostText, parsed.content8);
+    const canonResult = await this._canonWithGuesses(rawPostText, parsed.content8, alternativeTexts);
     if (!canonResult) {
-      console.debug('[SSD:verify] → MISMATCH (no line-break variant matched content8)');
+      console.debug('[SSD:verify] → MISMATCH (no text candidate matched content8)');
       return { ...base, state: 'MISMATCH' };
     }
     const { canonicalText, contentHash } = canonResult;
@@ -200,21 +201,22 @@ const verifier = {
     }
   },
 
-  // Try a small set of line-break normalisations and return the first whose
+  // Try each extraction candidate's line-break normalisations and return the first whose
   // content8 prefix matches expectedContent8. Returns null if none match (or if
   // expectedContent8 is absent, returns the as-is result immediately).
-  async _canonWithGuesses(rawText, expectedContent8) {
+  async _canonWithGuesses(rawText, expectedContent8, alternativeTexts = []) {
     // m.facebook.com wraps prose server-side at the viewport width with literal
     // \n. Re-flowing single line breaks lets canonicalise re-wrap at 80; blank-
     // line paragraph breaks are kept. Only words' layout can differ, not words.
     const soft = /(?<!\n)[ \t]*\n(?!\n)/g;
-    const variants = [
-      rawText,                           // 1. as-is (extraction matched signed text)
-      rawText.replace(/\n{2,}/g, '\n'), // 2. collapse blank lines (some views strip them)
-      rawText.replace(soft, ' '),       // 3. re-flow viewport-wrapped lines
-      rawText.replace(/(?<!\n)-\n(?!\n)/g, '-').replace(soft, ' '), // 4. as 3, break after '-' was mid-word
-    ];
-    for (const v of variants) {
+    const texts = expectedContent8 ? [rawText, ...alternativeTexts] : [rawText];
+    const variants = texts.flatMap(text => [
+      text,                           // 1. as-is (extraction matched signed text)
+      text.replace(/\n{2,}/g, '\n'), // 2. collapse blank lines (some views strip them)
+      text.replace(soft, ' '),       // 3. re-flow viewport-wrapped lines
+      text.replace(/(?<!\n)-\n(?!\n)/g, '-').replace(soft, ' '), // 4. as 3, break after '-' was mid-word
+    ]);
+    for (const v of new Set(variants)) {
       const result = await canon.canonicalise(v);
       const c8 = result.contentHash.slice(0, 8);
       console.debug('[SSD:verify] guess content8:', c8, expectedContent8 ? (c8 === expectedContent8 ? '✓' : '✗') : '(no hint)');
