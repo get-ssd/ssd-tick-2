@@ -68,6 +68,10 @@ const keyring = {
       : hash8OrRecord;
     if (!key) return null;
     if (key.vault) return 'self';
+    // Explicit SSD trust decisions survive the bridge; provenance alone must
+    // not turn an unverified key into a peer merely because it was copied.
+    if (key.trust_type === 'unverified') return 'unverified';
+    if (key.trust_type === 'peer') return 'peer';
     switch (key.source) {
       case 'direct': return 'peer';
       case 'bundle': return 'bundle';
@@ -88,7 +92,7 @@ const keyring = {
   // `revoked: true` field (or revoked_at timestamp) is honoured if present.
   isRevoked(key) {
     if (!key) return false;
-    return key.revoked === true || !!key.revoked_at;
+    return key.revoked === true || key.is_revoked === true || !!key.revoked_at || key.is_quarantined === true;
   },
 };
 

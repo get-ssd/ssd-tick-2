@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SSD - Signed, Sealed, Delivered",
-  "version": "0.4.26",
+  "version": "0.4.27",
   "browser_specific_settings": {
     "gecko": {
       "id": "ssd@idltd.com"
@@ -25,6 +25,15 @@
     "scripts": ["background/background.js"]
   },
   "content_scripts": [
+    {
+      "matches": [
+        "https://get-ssd.github.io/SignedSealedDelivered*",
+        "https://idltd.github.io/SignedSealedDelivered*",
+        "http://localhost/*", "http://127.0.0.1/*"
+      ],
+      "js": ["core/public-key-bridge.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": ["http://localhost/*", "http://127.0.0.1/*"],
       "exclude_matches": ["http://localhost/social-mock/*", "http://127.0.0.1/social-mock/*"],

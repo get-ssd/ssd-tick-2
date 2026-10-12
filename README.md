@@ -5,7 +5,23 @@ Browser extension that detects and verifies SSD-signed posts on social media. Wh
 - **Firefox** (all platforms, including Firefox for Android) — primary delivery target
 - **Chrome** (desktop only — Chrome for Android does not support extensions)
 
-Current version: **0.4.25**
+Current version: **0.4.27**
+
+## Local public-key sync with SSD
+
+Open SSD in the same browser and click **Keys → Sync public keys with Tick**. Confirm the named SSD identity. Missing keys are added to both collections; existing names and trust/source choices are kept, and their differences are reported. Revocation and quarantine propagate conservatively. Private keys are never requested or exchanged. Tick associates its **My key** with that identity on the first successful sync; a different owner is refused until the user deliberately changes My key using the existing owner import.
+
+This is a button-driven local merge, not background sync or device-to-device transport. Deletions do not propagate. The existing file-share features remain available. If a request is interrupted, click Sync again; committed additions are retained without duplicates.
+
+### Bridge maintenance
+
+`core/public-key-bridge.js` is a separate content-script entry in **both** manifests. It is enabled on the official `get-ssd.github.io/SignedSealedDelivered` and legacy `idltd.github.io/SignedSealedDelivered` installations, plus localhost root/index/advanced pages for development. It ignores child frames, other paths and other origins. Custom SSD hosts require a reviewed manifest match; the popup's saved PWA URL alone does not grant bridge access.
+
+Window messages use channel `SSD_TICK_KEYS_V1`, direction `request`/`response`, and a unique request `id`. `hello` reveals availability only. `read` validates the requested public owner, checks the stored Tick owner and asks for approval, then returns allowlisted public `records` and a single-use, two-minute `token`. `merge` requires that token and the same owner, re-reads storage, validates all records and writes additions/status updates in one operation. No unsolicited read or startup sync occurs.
+
+Wire records: `hash8`, normalized base64 `public_key_b64` (32-byte Ed25519), `name`, `source`, `trust_type`, `is_revoked`, `is_quarantined`; optional public strings `identity`, `issued`, `expires`, `revoked_at`, `quarantine_reason`, `vouched_by`, `bundle_name`. **Never spread stored records into messages.** Keep this allowlist aligned with SSD's `tick-sync.js`. Fingerprints are computed from full key bytes; a hash8 collision is rejected. Existing trust/names are not overwritten. `core/keyring.js` honours explicit SSD trust decisions before provenance, and quarantine as an unusable/revoked key.
+
+Build Chrome and run `node test/test-public-key-sync.js` for the real extension/PWA regression check. Build Firefox and run `node test/test-public-key-sync.js --firefox` for its real bridge smoke check. Optional `BROWSER_PATH` selects the corresponding browser; `TICK_EXTENSION_DIR` selects the unpacked Chrome folder or Firefox XPI. Disposable profiles stay in the project's `.scratch/`. Checks cover both directions, approval/cancellation, identity mismatch, public-only messages, provenance/status preservation, interrupted-sync retries, transaction rollback, invalid records, unrelated pages and missing Tick. Verify Android UI separately before claiming phone acceptance.
 
 ---
 
